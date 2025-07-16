@@ -10,8 +10,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -21,10 +21,10 @@ type DeploymentRequest struct {
 }
 
 type DeploymentResponse struct {
-	Status    string `json:"status"`
-	TagID     string `json:"tag_id"`
-	JobID     string `json:"job_id,omitempty"`
-	Message   string `json:"message,omitempty"`
+	Status  string `json:"status"`
+	TagID   string `json:"tag_id"`
+	JobID   string `json:"job_id,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 type StatusResponse struct {
@@ -115,7 +115,7 @@ func main() {
 	defer db.Close()
 
 	r := mux.NewRouter()
-	
+
 	// Health endpoint
 	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -261,7 +261,7 @@ func triggerNomadDeployment(serviceName, tagID, nomadURL string) (string, error)
 	// Make HTTP request to Nomad
 	client := &http.Client{Timeout: 30 * time.Second}
 	url := fmt.Sprintf("%s/v1/jobs", nomadURL)
-	
+
 	resp, err := client.Post(url, "application/json", bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		return "", fmt.Errorf("failed to submit job to Nomad: %v", err)
@@ -283,7 +283,7 @@ func triggerNomadDeployment(serviceName, tagID, nomadURL string) (string, error)
 func getNomadJobStatus(evalID, nomadURL string) (string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	url := fmt.Sprintf("%s/v1/evaluation/%s", nomadURL, evalID)
-	
+
 	resp, err := client.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to get job status from Nomad: %v", err)
