@@ -72,6 +72,31 @@ func (h *Handler) Deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// First check if the service exists in Nomad and is healthy
+	healthy, healthMsg, healthErr := h.nomad.CheckServiceHealth(req.ServiceName)
+	if healthErr != nil {
+		h.logger.WithError(healthErr).WithFields(logrus.Fields{
+			"service": req.ServiceName,
+		}).Error("Failed to check service health in Nomad")
+		http.Error(w, fmt.Sprintf("Failed to check service health: %v", healthErr), http.StatusInternalServerError)
+		return
+	}
+
+	if !healthy {
+		h.logger.WithFields(logrus.Fields{
+			"service": req.ServiceName,
+			"message": healthMsg,
+		}).Error("Service is not healthy in Nomad")
+		response := models.DeploymentResponse{
+			Status:  "failed",
+			TagID:   tagID,
+			Message: fmt.Sprintf("Service check failed: %s", healthMsg),
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	// Store initial deployment record
 	if err := database.InsertDeployment(h.db, tagID, req.ServiceName, "", "pending"); err != nil {
 		h.logger.WithError(err).Error("Database error inserting deployment")

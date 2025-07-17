@@ -308,3 +308,89 @@ func (c *Client) GetJobStatus(evalID string) (string, error) {
 
 	return mappedStatus, nil
 }
+
+func (c *Client) CheckServiceHealth(serviceName string) (bool, string, error) {
+	c.logger.WithFields(logrus.Fields{
+		"service_name": serviceName,
+		"nomad_url":    c.URL,
+	}).Info("Checking service health in Nomad")
+
+	// Fetch existing job definition from Nomad to check if service exists
+	getURL := fmt.Sprintf("%s/v1/job/%s", c.URL, serviceName)
+
+	c.logger.WithFields(logrus.Fields{
+		"service_name": serviceName,
+		"get_url":      getURL,
+	}).Debug("Fetching job definition from Nomad to verify service health")
+
+	resp, err := c.client.Get(getURL)
+	if err != nil {
+		c.logger.WithFields(logrus.Fields{
+			"service_name": serviceName,
+			"get_url":      getURL,
+			"error":        err.Error(),
+		}).Error("Failed to fetch job definition from Nomad during health check")
+		return false, "Failed to communicate with Nomad", fmt.Errorf("failed to fetch job definition from Nomad: %v", err)
+	}
+	defer resp.Body.Close()
+
+	c.logger.WithFields(logrus.Fields{
+		"service_name": serviceName,
+		"status_code":  resp.StatusCode,
+	}).Debug("Received response from Nomad service health check")
+
+	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusNotFound {
+			c.logger.WithFields(logrus.Fields{
+				"service_name": serviceName,
+				"status_code":  resp.StatusCode,
+			}).Warn("Service not found in Nomad")
+			return false, "Service not found in Nomad", fmt.Errorf("service '%s' not found in Nomad", serviceName)
+		}
+
+		c.logger.WithFields(logrus.Fields{
+			"service_name": serviceName,
+			"status_code":  resp.StatusCode,
+		}).Error("Nomad returned non-200 status for service health check")
+		return false, fmt.Sprintf("Nomad error (status code: %d)", resp.StatusCode), fmt.Errorf("failed to check service health, Nomad returned status: %d", resp.StatusCode)
+	}
+
+	var jobResp map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&jobResp); err != nil {
+		c.logger.WithFields(logrus.Fields{
+			"service_name": serviceName,
+			"error":        err.Error(),
+		}).Error("Failed to decode job definition response during health check")
+		return false, "Failed to parse Nomad response", fmt.Errorf("failed to decode job definition response: %v", err)
+	}
+
+	// Check if the job is running by examining the "Status" field
+	job, ok := jobResp["Job"].(map[string]interface{})
+	if !ok {
+		c.logger.WithFields(logrus.Fields{
+			"service_name": serviceName,
+		}).Error("Invalid job definition format during health check")
+		return false, "Invalid job definition format", fmt.Errorf("invalid job definition format")
+	}
+
+	status, ok := job["Status"].(string)
+	if !ok {
+		c.logger.WithFields(logrus.Fields{
+			"service_name": serviceName,
+		}).Warn("Could not determine job status")
+		// If we can't determine status, we assume it's available but log a warning
+		return true, "Available", nil
+	}
+
+	c.logger.WithFields(logrus.Fields{
+		"service_name": serviceName,
+		"job_status":   status,
+	}).Info("Successfully checked service health status")
+
+	// "running" is the expected status for a healthy job
+	if status == "running" {
+		return true, "Available", nil
+	} else {
+		return false, fmt.Sprintf("Service is not running (status: %s)", status), nil
+	}
+}
