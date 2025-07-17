@@ -3,11 +3,10 @@ package server
 import (
 	"database/sql"
 	"net/http"
-	"os"
-	"strings"
 
 	"bastion-deployment/internal/config"
 	"bastion-deployment/internal/handlers"
+	"bastion-deployment/internal/logger"
 	"bastion-deployment/internal/nomad"
 
 	"github.com/gorilla/mux"
@@ -19,45 +18,18 @@ type Server struct {
 	db      *sql.DB
 	handler *handlers.Handler
 	router  *mux.Router
-	logger  *logrus.Logger
+	logger  *logrus.Entry
 }
 
 func NewServer(cfg *config.Config, db *sql.DB) *Server {
-	// Create a shared logger
-	logger := logrus.New()
+	// Initialize the global logger
+	logger.Initialize()
 
-	// Configure logger based on environment
-	logLevel := strings.ToLower(os.Getenv("LOG_LEVEL"))
-	switch logLevel {
-	case "debug":
-		logger.SetLevel(logrus.DebugLevel)
-	case "info":
-		logger.SetLevel(logrus.InfoLevel)
-	case "warn", "warning":
-		logger.SetLevel(logrus.WarnLevel)
-	case "error":
-		logger.SetLevel(logrus.ErrorLevel)
-	default:
-		logger.SetLevel(logrus.InfoLevel)
-	}
-
-	// Configure log format
-	logFormat := strings.ToLower(os.Getenv("LOG_FORMAT"))
-	if logFormat == "text" {
-		logger.SetFormatter(&logrus.TextFormatter{
-			FullTimestamp: true,
-		})
-	} else {
-		// Default to JSON format
-		logger.SetFormatter(&logrus.JSONFormatter{
-			TimestampFormat: "2006-01-02T15:04:05.000Z07:00",
-		})
-	}
+	// Get a logger instance with the server module context
+	serverLogger := logger.WithModule("server")
 
 	// Create Nomad client with the shared logger
 	nomadClient := nomad.NewClient(cfg.NomadURL, cfg.SkipTLSVerify, cfg.NomadToken)
-	nomadClient.SetLogLevel(logger.Level)
-	nomadClient.SetLogFormatter(logger.Formatter)
 
 	handler := handlers.NewHandler(db, cfg, nomadClient)
 
@@ -66,7 +38,7 @@ func NewServer(cfg *config.Config, db *sql.DB) *Server {
 		db:      db,
 		handler: handler,
 		router:  mux.NewRouter(),
-		logger:  logger,
+		logger:  serverLogger,
 	}
 
 	s.setupRoutes()

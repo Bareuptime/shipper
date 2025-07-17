@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"time"
 
+	"bastion-deployment/internal/logger"
 	"bastion-deployment/internal/models"
 
 	"github.com/sirupsen/logrus"
@@ -18,20 +18,12 @@ type Client struct {
 	URL    string
 	Token  string
 	client *http.Client
-	logger *logrus.Logger
+	logger *logrus.Entry
 }
 
 func NewClient(url string, skipTLSVerify bool, token string) *Client {
-	logger := logrus.New()
-	logger.SetLevel(logrus.DebugLevel)
-	// Use text formatter for stdout with colors
-	logger.SetFormatter(&logrus.TextFormatter{
-		TimestampFormat: time.RFC3339,
-		FullTimestamp:   true,
-		ForceColors:     true,
-	})
-	// Ensure logs go to stdout
-	logger.SetOutput(os.Stdout)
+	// Get a logger instance with the nomad client module context
+	clientLogger := logger.WithModule("nomad-client")
 
 	// Create custom transport with TLS verification option
 	transport := &http.Transport{
@@ -47,22 +39,12 @@ func NewClient(url string, skipTLSVerify bool, token string) *Client {
 			Timeout:   30 * time.Second,
 			Transport: transport,
 		},
-		logger: logger,
+		logger: clientLogger,
 	}
 }
 
-// SetLogLevel sets the logging level for the client
-func (c *Client) SetLogLevel(level logrus.Level) {
-	c.logger.SetLevel(level)
-}
-
-// SetLogFormatter sets the logging formatter for the client
-func (c *Client) SetLogFormatter(formatter logrus.Formatter) {
-	c.logger.SetFormatter(formatter)
-}
-
 // GetLogger returns the client's logger instance
-func (c *Client) GetLogger() *logrus.Logger {
+func (c *Client) GetLogger() *logrus.Entry {
 	return c.logger
 }
 
@@ -76,7 +58,10 @@ func getMapKeys(m map[string]interface{}) []string {
 }
 
 func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
-	c.logger.WithFields(logrus.Fields{
+	// Create a logger instance with a request ID for this operation
+	reqLogger := logger.WithRequestIDAndModule("nomad-client")
+
+	reqLogger.WithFields(logrus.Fields{
 		"service_name": serviceName,
 		"tag_id":       tagID,
 		"nomad_url":    c.URL,
@@ -85,7 +70,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	// Fetch existing job definition from Nomad
 	getURL := fmt.Sprintf("%s/v1/job/%s", c.URL, serviceName)
 
-	c.logger.WithFields(logrus.Fields{
+	reqLogger.WithFields(logrus.Fields{
 		"service_name": serviceName,
 		"get_url":      getURL,
 	}).Debug("Fetching existing job definition from Nomad")
@@ -96,7 +81,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		c.logger.WithFields(logrus.Fields{
+		reqLogger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"get_url":      getURL,
 			"error":        err.Error(),
@@ -106,7 +91,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		c.logger.WithFields(logrus.Fields{
+		reqLogger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"status_code":  resp.StatusCode,
 			"get_url":      getURL,
@@ -116,14 +101,14 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 
 	var jobResp map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&jobResp); err != nil {
-		c.logger.WithFields(logrus.Fields{
+		reqLogger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"error":        err.Error(),
 		}).Error("Failed to decode job definition response")
 		return "", fmt.Errorf("failed to decode job definition response: %v", err)
 	}
 
-	c.logger.WithFields(logrus.Fields{
+	reqLogger.WithFields(logrus.Fields{
 		"service_name": serviceName,
 		"job_keys":     getMapKeys(jobResp),
 	}).Debug("Successfully decoded job definition response")
@@ -131,14 +116,14 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	// Extract the job definition
 	job, ok := jobResp["Job"].(map[string]interface{})
 	if !ok {
-		c.logger.WithFields(logrus.Fields{
+		reqLogger.WithFields(logrus.Fields{
 			"service_name":  serviceName,
 			"job_resp_type": fmt.Sprintf("%T", jobResp["Job"]),
 		}).Error("Invalid job definition format - Job field missing or wrong type")
 		return "", fmt.Errorf("invalid job definition format")
 	}
 
-	c.logger.WithFields(logrus.Fields{
+	reqLogger.WithFields(logrus.Fields{
 		"service_name": serviceName,
 		"job_id":       job["ID"],
 		"job_name":     job["Name"],
@@ -148,7 +133,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 
 	// Append tag_id to Meta
 	if job["Meta"] == nil {
-		c.logger.WithFields(logrus.Fields{
+		reqLogger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 		}).Debug("Job Meta field is nil, creating new meta map")
 		job["Meta"] = make(map[string]string)
@@ -156,7 +141,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 
 	meta, ok := job["Meta"].(map[string]interface{})
 	if !ok {
-		c.logger.WithFields(logrus.Fields{
+		reqLogger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"meta_type":    fmt.Sprintf("%T", job["Meta"]),
 		}).Warn("Job Meta field has wrong type, reinitializing")
@@ -165,14 +150,14 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	}
 
 	// Log existing meta before modification
-	c.logger.WithFields(logrus.Fields{
+	reqLogger.WithFields(logrus.Fields{
 		"service_name":  serviceName,
 		"existing_meta": meta,
 	}).Debug("Current job metadata before adding tag_id")
 
 	meta["tag_id"] = tagID
 
-	c.logger.WithFields(logrus.Fields{
+	reqLogger.WithFields(logrus.Fields{
 		"service_name": serviceName,
 		"tag_id":       tagID,
 		"updated_meta": meta,
@@ -186,7 +171,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	// Convert to JSON
 	payloadBytes, err := json.Marshal(jobPayload)
 	if err != nil {
-		c.logger.WithFields(logrus.Fields{
+		reqLogger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"error":        err.Error(),
 		}).Error("Failed to marshal job payload to JSON")
@@ -195,7 +180,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	// Make HTTP request to Nomad
 	url := fmt.Sprintf("%s/v1/jobs", c.URL)
 
-	c.logger.WithFields(logrus.Fields{
+	reqLogger.WithFields(logrus.Fields{
 		"service_name": serviceName,
 		"post_url":     url,
 		"payload_size": len(payloadBytes),
@@ -204,7 +189,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	// Create POST request with token header
 	req, err = http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
 	if err != nil {
-		c.logger.WithFields(logrus.Fields{
+		reqLogger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"post_url":     url,
 			"error":        err.Error(),
@@ -220,7 +205,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 
 	resp, err = c.client.Do(req)
 	if err != nil {
-		c.logger.WithFields(logrus.Fields{
+		reqLogger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"post_url":     url,
 			"error":        err.Error(),
@@ -229,13 +214,13 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	c.logger.WithFields(logrus.Fields{
+	reqLogger.WithFields(logrus.Fields{
 		"service_name": serviceName,
 		"status_code":  resp.StatusCode,
 	}).Debug("Received response from Nomad job submission")
 
 	if resp.StatusCode != http.StatusOK {
-		c.logger.WithFields(logrus.Fields{
+		reqLogger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"status_code":  resp.StatusCode,
 			"post_url":     url,
@@ -245,14 +230,14 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 
 	var nomadResp models.NomadJobResponse
 	if err := json.NewDecoder(resp.Body).Decode(&nomadResp); err != nil {
-		c.logger.WithFields(logrus.Fields{
+		reqLogger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"error":        err.Error(),
 		}).Error("Failed to decode Nomad job submission response")
 		return "", fmt.Errorf("failed to decode Nomad response: %v", err)
 	}
 
-	c.logger.WithFields(logrus.Fields{
+	reqLogger.WithFields(logrus.Fields{
 		"service_name": serviceName,
 		"tag_id":       tagID,
 		"eval_id":      nomadResp.EvalID,
