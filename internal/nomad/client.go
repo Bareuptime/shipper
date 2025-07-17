@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"bastion-deployment/internal/models"
-	
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -24,7 +24,7 @@ func NewClient(url string) *Client {
 	logger.SetFormatter(&logrus.JSONFormatter{
 		TimestampFormat: time.RFC3339,
 	})
-	
+
 	return &Client{
 		URL:    url,
 		client: &http.Client{Timeout: 30 * time.Second},
@@ -60,7 +60,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 
 	// Fetch existing job definition from Nomad
 	getURL := fmt.Sprintf("%s/v1/job/%s", c.URL, serviceName)
-	
+
 	c.logger.WithFields(logrus.Fields{
 		"service_name": serviceName,
 		"get_url":      getURL,
@@ -78,9 +78,9 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	defer resp.Body.Close()
 
 	c.logger.WithFields(logrus.Fields{
-		"service_name":  serviceName,
-		"status_code":   resp.StatusCode,
-		"content_type":  resp.Header.Get("Content-Type"),
+		"service_name":   serviceName,
+		"status_code":    resp.StatusCode,
+		"content_type":   resp.Header.Get("Content-Type"),
 		"content_length": resp.Header.Get("Content-Length"),
 	}).Debug("Received response from Nomad job fetch")
 
@@ -111,7 +111,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	job, ok := jobResp["Job"].(map[string]interface{})
 	if !ok {
 		c.logger.WithFields(logrus.Fields{
-			"service_name": serviceName,
+			"service_name":  serviceName,
 			"job_resp_type": fmt.Sprintf("%T", jobResp["Job"]),
 		}).Error("Invalid job definition format - Job field missing or wrong type")
 		return "", fmt.Errorf("invalid job definition format")
@@ -145,8 +145,8 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 
 	// Log existing meta before modification
 	c.logger.WithFields(logrus.Fields{
-		"service_name":   serviceName,
-		"existing_meta":  meta,
+		"service_name":  serviceName,
+		"existing_meta": meta,
 	}).Debug("Current job metadata before adding tag_id")
 
 	meta["tag_id"] = tagID
@@ -173,8 +173,8 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	}
 
 	c.logger.WithFields(logrus.Fields{
-		"service_name":   serviceName,
-		"payload_size":   len(payloadBytes),
+		"service_name": serviceName,
+		"payload_size": len(payloadBytes),
 	}).Debug("Successfully marshaled job payload")
 
 	// Make HTTP request to Nomad
@@ -234,25 +234,25 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 
 func (c *Client) GetJobStatus(evalID string) (string, error) {
 	c.logger.WithFields(logrus.Fields{
-		"eval_id":    evalID,
-		"nomad_url":  c.URL,
+		"eval_id":   evalID,
+		"nomad_url": c.URL,
 	}).Info("Starting job status check")
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	url := fmt.Sprintf("%s/v1/evaluation/%s", c.URL, evalID)
 
 	c.logger.WithFields(logrus.Fields{
-		"eval_id":     evalID,
-		"status_url":  url,
-		"timeout":     "10s",
+		"eval_id":    evalID,
+		"status_url": url,
+		"timeout":    "10s",
 	}).Debug("Making request to get evaluation status")
 
 	resp, err := client.Get(url)
 	if err != nil {
 		c.logger.WithFields(logrus.Fields{
-			"eval_id":     evalID,
-			"status_url":  url,
-			"error":       err.Error(),
+			"eval_id":    evalID,
+			"status_url": url,
+			"error":      err.Error(),
 		}).Error("Failed to get job status from Nomad")
 		return "", fmt.Errorf("failed to get job status from Nomad: %v", err)
 	}
@@ -267,9 +267,9 @@ func (c *Client) GetJobStatus(evalID string) (string, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		c.logger.WithFields(logrus.Fields{
-			"eval_id":      evalID,
-			"status_code":  resp.StatusCode,
-			"status_url":   url,
+			"eval_id":     evalID,
+			"status_code": resp.StatusCode,
+			"status_url":  url,
 		}).Error("Nomad returned non-200 status for evaluation status")
 		return "", fmt.Errorf("nomad returned status: %d", resp.StatusCode)
 	}
@@ -284,8 +284,8 @@ func (c *Client) GetJobStatus(evalID string) (string, error) {
 	}
 
 	c.logger.WithFields(logrus.Fields{
-		"eval_id":       evalID,
-		"nomad_status":  evalResp.Status,
+		"eval_id":      evalID,
+		"nomad_status": evalResp.Status,
 	}).Debug("Successfully decoded Nomad evaluation response")
 
 	// Map Nomad status to our status

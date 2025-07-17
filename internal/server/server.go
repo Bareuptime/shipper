@@ -24,7 +24,7 @@ type Server struct {
 
 func NewServer(cfg *config.Config, db *sql.DB) *Server {
 	nomadClient := nomad.NewClient(cfg.NomadURL)
-	
+
 	// Configure logger based on environment
 	logLevel := strings.ToLower(os.Getenv("LOG_LEVEL"))
 	switch logLevel {
@@ -39,7 +39,7 @@ func NewServer(cfg *config.Config, db *sql.DB) *Server {
 	default:
 		nomadClient.SetLogLevel(logrus.InfoLevel)
 	}
-	
+
 	// Configure log format
 	logFormat := strings.ToLower(os.Getenv("LOG_FORMAT"))
 	if logFormat == "text" {
@@ -52,7 +52,7 @@ func NewServer(cfg *config.Config, db *sql.DB) *Server {
 			TimestampFormat: "2006-01-02T15:04:05.000Z07:00",
 		})
 	}
-	
+
 	handler := handlers.NewHandler(db, cfg, nomadClient)
 
 	s := &Server{
