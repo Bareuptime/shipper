@@ -107,66 +107,26 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 		"job_spec":     jobSpec,
 	}).Debug("Fetched job definition from Nomad")
 
-	// Extract the job definition
-	job, ok := jobSpec["Job"].(map[string]interface{})
-	if !ok {
-		c.logger.WithFields(logrus.Fields{
-			"service_name":  serviceName,
-			"job_resp_type": fmt.Sprintf("%T", jobSpec["Job"]),
-		}).Error("Invalid job definition format - Job field missing or wrong type")
-		return "", fmt.Errorf("invalid job definition format")
-	}
-
 	// Create or update the Meta field
 	newMeta := map[string]interface{}{
 		"tag_id":     tagID,
 		"timestamp":  fmt.Sprintf("%d", time.Now().Unix()),
 		"updated_by": "bastion",
 	}
-
-	// If Meta already exists, preserve existing values not overridden
-	if job["Meta"] != nil {
-		if existingMeta, ok := job["Meta"].(map[string]interface{}); ok {
-			for k, v := range existingMeta {
-				if _, exists := newMeta[k]; !exists {
-					newMeta[k] = v
-				}
-			}
-		}
-	}
-
-	// Update job's Meta with the new metadata
-	job["Meta"] = newMeta
-
-	c.logger.WithFields(logrus.Fields{
-		"service_name": serviceName,
-		"tag_id":       tagID,
-		"updated_meta": newMeta,
-	}).Info("Applied metadata to job definition")
+	jobSpec["Meta"] = newMeta
 
 	// Create the job payload with the updated job definition
 	jobPayload := map[string]interface{}{
-		"Job": job,
+		"Job": jobSpec,
 	}
 
 	// Convert to JSON
-	payloadBytes, err := json.Marshal(jobPayload)
-	if err != nil {
-		c.logger.WithFields(logrus.Fields{
-			"service_name": serviceName,
-			"error":        err.Error(),
-		}).Error("Failed to marshal job payload to JSON")
-		return "", fmt.Errorf("failed to marshal job payload: %v", err)
-	}
+	payloadBytes, _ := json.Marshal(jobPayload)
 
 	// Make HTTP request to Nomad
 	url := fmt.Sprintf("%s/v1/jobs", c.URL)
 
-	c.logger.WithFields(logrus.Fields{
-		"service_name": serviceName,
-		"post_url":     url,
-		"payload_size": len(payloadBytes),
-	}).Info("Submitting updated job to Nomad")
+	c.logger.Info("Submitting updated job to Nomad")
 
 	// Create POST request with token header
 	req, err = http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
@@ -181,9 +141,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 
 	// Set content type and add token header
 	req.Header.Set("Content-Type", "application/json")
-	if c.Token != "" {
-		req.Header.Add("X-Nomad-Token", c.Token)
-	}
+	req.Header.Add("X-Nomad-Token", c.Token)
 
 	resp, err = c.client.Do(req)
 	if err != nil {
@@ -197,20 +155,13 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		c.logger.WithFields(logrus.Fields{
-			"service_name": serviceName,
-			"status_code":  resp.StatusCode,
-			"post_url":     url,
-		}).Error("Nomad returned non-200 status for job submission")
+		c.logger.Error("Nomad returned non-200 status for job submission")
 		return "", fmt.Errorf("nomad returned status: %d", resp.StatusCode)
 	}
 
 	var nomadResp models.NomadJobResponse
 	if err := json.NewDecoder(resp.Body).Decode(&nomadResp); err != nil {
-		c.logger.WithFields(logrus.Fields{
-			"service_name": serviceName,
-			"error":        err.Error(),
-		}).Error("Failed to decode Nomad job submission response")
+		c.logger.Error("Failed to decode Nomad job submission response")
 		return "", fmt.Errorf("failed to decode Nomad response: %v", err)
 	}
 
