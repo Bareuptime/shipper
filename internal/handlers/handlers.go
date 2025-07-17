@@ -41,18 +41,36 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Deploy(w http.ResponseWriter, r *http.Request) {
 	var req models.DeploymentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.WithError(err).Error("Failed to decode request JSON")
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
+	h.logger.WithField("request", req).Info("Deployment request received")
+
 	// Validate service name
 	if !h.config.IsValidService(req.ServiceName) {
+		h.logger.WithField("service_name", req.ServiceName).Error("Invalid service name")
 		http.Error(w, "Invalid service name", http.StatusBadRequest)
 		return
 	}
 
-	// Generate unique tag ID
+	// Check if tagID is empty or doesn't exist
 	tagID := req.TagID
+	if tagID == "" {
+		h.logger.Error("Tag ID is missing in request")
+		http.Error(w, "Tag ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Check if deployment already exists
+	_, _, _, err := database.GetDeployment(h.db, tagID)
+	if err == nil {
+		// Deployment exists
+		h.logger.WithField("tag_id", tagID).Error("Deployment with this tag_id already exists")
+		http.Error(w, fmt.Sprintf("A deployment with tag_id %s already exists", tagID), http.StatusConflict)
+		return
+	}
 
 	// Store initial deployment record
 	if err := database.InsertDeployment(h.db, tagID, req.ServiceName, "", "pending"); err != nil {
