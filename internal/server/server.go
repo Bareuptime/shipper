@@ -55,7 +55,7 @@ func NewServer(cfg *config.Config, db *sql.DB) *Server {
 	}
 
 	// Create Nomad client with the shared logger
-	nomadClient := nomad.NewClient(cfg.NomadURL, cfg.SkipTLSVerify)
+	nomadClient := nomad.NewClient(cfg.NomadURL, cfg.SkipTLSVerify, cfg.NomadToken)
 	nomadClient.SetLogLevel(logger.Level)
 	nomadClient.SetLogFormatter(logger.Formatter)
 

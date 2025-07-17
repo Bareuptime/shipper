@@ -16,11 +16,12 @@ import (
 
 type Client struct {
 	URL    string
+	Token  string
 	client *http.Client
 	logger *logrus.Logger
 }
 
-func NewClient(url string, skipTLSVerify bool) *Client {
+func NewClient(url string, skipTLSVerify bool, token string) *Client {
 	logger := logrus.New()
 	logger.SetLevel(logrus.DebugLevel)
 	// Use text formatter for stdout with colors
@@ -40,7 +41,8 @@ func NewClient(url string, skipTLSVerify bool) *Client {
 	}
 
 	return &Client{
-		URL: url,
+		URL:   url,
+		Token: token,
 		client: &http.Client{
 			Timeout:   30 * time.Second,
 			Transport: transport,
@@ -88,7 +90,11 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 		"get_url":      getURL,
 	}).Debug("Fetching existing job definition from Nomad")
 
-	resp, err := c.client.Get(getURL)
+	// Create request with token header
+	req, _ := http.NewRequest("GET", getURL, nil)
+	req.Header.Add("X-Nomad-Token", c.Token)
+
+	resp, err := c.client.Do(req)
 	if err != nil {
 		c.logger.WithFields(logrus.Fields{
 			"service_name": serviceName,
@@ -98,11 +104,6 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 		return "", fmt.Errorf("failed to fetch job definition from Nomad: %v", err)
 	}
 	defer resp.Body.Close()
-
-	c.logger.WithFields(logrus.Fields{
-		"service_name": serviceName,
-		"status_code":  resp.StatusCode,
-	}).Debug("Received response from Nomad job fetch")
 
 	if resp.StatusCode != http.StatusOK {
 		c.logger.WithFields(logrus.Fields{
@@ -200,7 +201,24 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 		"payload_size": len(payloadBytes),
 	}).Info("Submitting updated job to Nomad")
 
-	resp, err = c.client.Post(url, "application/json", bytes.NewBuffer(payloadBytes))
+	// Create POST request with token header
+	req, err = http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		c.logger.WithFields(logrus.Fields{
+			"service_name": serviceName,
+			"post_url":     url,
+			"error":        err.Error(),
+		}).Error("Failed to create POST request")
+		return "", fmt.Errorf("failed to create POST request: %v", err)
+	}
+
+	// Set content type and add token header
+	req.Header.Set("Content-Type", "application/json")
+	if c.Token != "" {
+		req.Header.Add("X-Nomad-Token", c.Token)
+	}
+
+	resp, err = c.client.Do(req)
 	if err != nil {
 		c.logger.WithFields(logrus.Fields{
 			"service_name": serviceName,
@@ -259,7 +277,23 @@ func (c *Client) GetJobStatus(evalID string) (string, error) {
 		"timeout":    "10s",
 	}).Debug("Making request to get evaluation status")
 
-	resp, err := client.Get(url)
+	// Create request with token header
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		c.logger.WithFields(logrus.Fields{
+			"eval_id":    evalID,
+			"status_url": url,
+			"error":      err.Error(),
+		}).Error("Failed to create GET request")
+		return "", fmt.Errorf("failed to create GET request: %v", err)
+	}
+
+	// Add token header if available
+	if c.Token != "" {
+		req.Header.Add("X-Nomad-Token", c.Token)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		c.logger.WithFields(logrus.Fields{
 			"eval_id":    evalID,
@@ -318,90 +352,4 @@ func (c *Client) GetJobStatus(evalID string) (string, error) {
 	}).Info("Successfully mapped job status")
 
 	return mappedStatus, nil
-}
-
-func (c *Client) CheckServiceHealth(serviceName string) (bool, string, error) {
-	c.logger.WithFields(logrus.Fields{
-		"service_name": serviceName,
-		"nomad_url":    c.URL,
-	}).Info("Checking service health in Nomad")
-
-	// Fetch existing job definition from Nomad to check if service exists
-	getURL := fmt.Sprintf("%s/v1/job/%s", c.URL, serviceName)
-
-	c.logger.WithFields(logrus.Fields{
-		"service_name": serviceName,
-		"get_url":      getURL,
-	}).Info("Fetching job definition from Nomad to verify service health")
-
-	resp, err := c.client.Get(getURL)
-	if err != nil {
-		c.logger.WithFields(logrus.Fields{
-			"service_name": serviceName,
-			"get_url":      getURL,
-			"error":        err.Error(),
-		}).Error("Failed to fetch job definition from Nomad during health check")
-		return false, "Failed to communicate with Nomad", fmt.Errorf("failed to fetch job definition from Nomad: %v", err)
-	}
-	defer resp.Body.Close()
-
-	c.logger.WithFields(logrus.Fields{
-		"service_name": serviceName,
-		"status_code":  resp.StatusCode,
-	}).Debug("Received response from Nomad service health check")
-
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusNotFound {
-			c.logger.WithFields(logrus.Fields{
-				"service_name": serviceName,
-				"status_code":  resp.StatusCode,
-			}).Warn("Service not found in Nomad")
-			return false, "Service not found in Nomad", fmt.Errorf("service '%s' not found in Nomad", serviceName)
-		}
-
-		c.logger.WithFields(logrus.Fields{
-			"service_name": serviceName,
-			"status_code":  resp.StatusCode,
-		}).Error("Nomad returned non-200 status for service health check")
-		return false, fmt.Sprintf("Nomad error (status code: %d)", resp.StatusCode), fmt.Errorf("failed to check service health, Nomad returned status: %d", resp.StatusCode)
-	}
-
-	var jobResp map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&jobResp); err != nil {
-		c.logger.WithFields(logrus.Fields{
-			"service_name": serviceName,
-			"error":        err.Error(),
-		}).Error("Failed to decode job definition response during health check")
-		return false, "Failed to parse Nomad response", fmt.Errorf("failed to decode job definition response: %v", err)
-	}
-
-	// Check if the job is running by examining the "Status" field
-	job, ok := jobResp["Job"].(map[string]interface{})
-	if !ok {
-		c.logger.WithFields(logrus.Fields{
-			"service_name": serviceName,
-		}).Error("Invalid job definition format during health check")
-		return false, "Invalid job definition format", fmt.Errorf("invalid job definition format")
-	}
-
-	status, ok := job["Status"].(string)
-	if !ok {
-		c.logger.WithFields(logrus.Fields{
-			"service_name": serviceName,
-		}).Warn("Could not determine job status")
-		// If we can't determine status, we assume it's available but log a warning
-		return true, "Available", nil
-	}
-
-	c.logger.WithFields(logrus.Fields{
-		"service_name": serviceName,
-		"job_status":   status,
-	}).Info("Successfully checked service health status")
-
-	// "running" is the expected status for a healthy job
-	if status == "running" {
-		return true, "Available", nil
-	} else {
-		return false, fmt.Sprintf("Service is not running (status: %s)", status), nil
-	}
 }

@@ -12,6 +12,7 @@ type Config struct {
 	Port          string
 	ValidServices []string
 	SkipTLSVerify bool
+	NomadToken    string
 }
 
 func Load() *Config {
@@ -37,6 +38,7 @@ func Load() *Config {
 		Port:          getEnv("PORT", "16166"),
 		ValidServices: validServices,
 		SkipTLSVerify: skipTLSVerify,
+		NomadToken:    getEnv("NOMAD_TOKEN", "e26c5903-27f8-4c10-7d91-1d5b5b022c89"),
 	}
 }
 
