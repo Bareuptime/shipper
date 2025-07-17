@@ -49,10 +49,8 @@ func (c *Client) GetLogger() *logrus.Entry {
 }
 
 func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
-	// Create a logger instance with a request ID for this operation
-	reqLogger := logger.WithRequestIDAndModule("nomad-client")
-
-	reqLogger.WithFields(logrus.Fields{
+	// Use the existing client logger
+	c.logger.WithFields(logrus.Fields{
 		"service_name": serviceName,
 		"tag_id":       tagID,
 		"nomad_url":    c.URL,
@@ -61,7 +59,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	// Fetch existing job definition from Nomad
 	getURL := fmt.Sprintf("%s/v1/job/%s", c.URL, serviceName)
 
-	reqLogger.WithFields(logrus.Fields{
+	c.logger.WithFields(logrus.Fields{
 		"service_name": serviceName,
 		"get_url":      getURL,
 	}).Debug("Fetching existing job definition from Nomad")
@@ -72,7 +70,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		reqLogger.WithFields(logrus.Fields{
+		c.logger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"get_url":      getURL,
 			"error":        err.Error(),
@@ -82,7 +80,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		reqLogger.WithFields(logrus.Fields{
+		c.logger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"status_code":  resp.StatusCode,
 			"get_url":      getURL,
@@ -92,17 +90,23 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 
 	var jobSpec map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&jobSpec); err != nil {
-		reqLogger.WithFields(logrus.Fields{
+		c.logger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"error":        err.Error(),
 		}).Error("Failed to decode job definition response")
 		return "", fmt.Errorf("failed to decode job definition response: %v", err)
 	}
 
+	// can you print resp.body for debugging
+	c.logger.WithFields(logrus.Fields{
+		"service_name": serviceName,
+		"job_spec":     jobSpec,
+	}).Debug("Fetched job definition from Nomad")
+
 	// Extract the job definition
 	job, ok := jobSpec["Job"].(map[string]interface{})
 	if !ok {
-		reqLogger.WithFields(logrus.Fields{
+		c.logger.WithFields(logrus.Fields{
 			"service_name":  serviceName,
 			"job_resp_type": fmt.Sprintf("%T", jobSpec["Job"]),
 		}).Error("Invalid job definition format - Job field missing or wrong type")
@@ -130,7 +134,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	// Update job's Meta with the new metadata
 	job["Meta"] = newMeta
 
-	reqLogger.WithFields(logrus.Fields{
+	c.logger.WithFields(logrus.Fields{
 		"service_name": serviceName,
 		"tag_id":       tagID,
 		"updated_meta": newMeta,
@@ -144,7 +148,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	// Convert to JSON
 	payloadBytes, err := json.Marshal(jobPayload)
 	if err != nil {
-		reqLogger.WithFields(logrus.Fields{
+		c.logger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"error":        err.Error(),
 		}).Error("Failed to marshal job payload to JSON")
@@ -154,7 +158,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	// Make HTTP request to Nomad
 	url := fmt.Sprintf("%s/v1/jobs", c.URL)
 
-	reqLogger.WithFields(logrus.Fields{
+	c.logger.WithFields(logrus.Fields{
 		"service_name": serviceName,
 		"post_url":     url,
 		"payload_size": len(payloadBytes),
@@ -163,7 +167,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	// Create POST request with token header
 	req, err = http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
 	if err != nil {
-		reqLogger.WithFields(logrus.Fields{
+		c.logger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"post_url":     url,
 			"error":        err.Error(),
@@ -179,7 +183,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 
 	resp, err = c.client.Do(req)
 	if err != nil {
-		reqLogger.WithFields(logrus.Fields{
+		c.logger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"post_url":     url,
 			"error":        err.Error(),
@@ -189,7 +193,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		reqLogger.WithFields(logrus.Fields{
+		c.logger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"status_code":  resp.StatusCode,
 			"post_url":     url,
@@ -199,14 +203,14 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 
 	var nomadResp models.NomadJobResponse
 	if err := json.NewDecoder(resp.Body).Decode(&nomadResp); err != nil {
-		reqLogger.WithFields(logrus.Fields{
+		c.logger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"error":        err.Error(),
 		}).Error("Failed to decode Nomad job submission response")
 		return "", fmt.Errorf("failed to decode Nomad response: %v", err)
 	}
 
-	reqLogger.WithFields(logrus.Fields{
+	c.logger.WithFields(logrus.Fields{
 		"service_name": serviceName,
 		"tag_id":       tagID,
 		"eval_id":      nomadResp.EvalID,
