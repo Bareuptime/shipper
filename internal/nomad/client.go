@@ -42,6 +42,11 @@ func (c *Client) SetLogFormatter(formatter logrus.Formatter) {
 	c.logger.SetFormatter(formatter)
 }
 
+// GetLogger returns the client's logger instance
+func (c *Client) GetLogger() *logrus.Logger {
+	return c.logger
+}
+
 // Helper function to get map keys for logging
 func getMapKeys(m map[string]interface{}) []string {
 	keys := make([]string, 0, len(m))

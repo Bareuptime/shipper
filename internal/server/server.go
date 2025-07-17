@@ -2,8 +2,6 @@ package server
 
 import (
 	"database/sql"
-	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -21,38 +19,45 @@ type Server struct {
 	db      *sql.DB
 	handler *handlers.Handler
 	router  *mux.Router
+	logger  *logrus.Logger
 }
 
 func NewServer(cfg *config.Config, db *sql.DB) *Server {
-	nomadClient := nomad.NewClient(cfg.NomadURL)
-
+	// Create a shared logger
+	logger := logrus.New()
+	
 	// Configure logger based on environment
 	logLevel := strings.ToLower(os.Getenv("LOG_LEVEL"))
 	switch logLevel {
 	case "debug":
-		nomadClient.SetLogLevel(logrus.DebugLevel)
+		logger.SetLevel(logrus.DebugLevel)
 	case "info":
-		nomadClient.SetLogLevel(logrus.InfoLevel)
+		logger.SetLevel(logrus.InfoLevel)
 	case "warn", "warning":
-		nomadClient.SetLogLevel(logrus.WarnLevel)
+		logger.SetLevel(logrus.WarnLevel)
 	case "error":
-		nomadClient.SetLogLevel(logrus.ErrorLevel)
+		logger.SetLevel(logrus.ErrorLevel)
 	default:
-		nomadClient.SetLogLevel(logrus.InfoLevel)
+		logger.SetLevel(logrus.InfoLevel)
 	}
 
 	// Configure log format
 	logFormat := strings.ToLower(os.Getenv("LOG_FORMAT"))
 	if logFormat == "text" {
-		nomadClient.SetLogFormatter(&logrus.TextFormatter{
+		logger.SetFormatter(&logrus.TextFormatter{
 			FullTimestamp: true,
 		})
 	} else {
 		// Default to JSON format
-		nomadClient.SetLogFormatter(&logrus.JSONFormatter{
+		logger.SetFormatter(&logrus.JSONFormatter{
 			TimestampFormat: "2006-01-02T15:04:05.000Z07:00",
 		})
 	}
+	
+	// Create Nomad client with the shared logger
+	nomadClient := nomad.NewClient(cfg.NomadURL)
+	nomadClient.SetLogLevel(logger.Level)
+	nomadClient.SetLogFormatter(logger.Formatter)
 
 	handler := handlers.NewHandler(db, cfg, nomadClient)
 
@@ -61,6 +66,7 @@ func NewServer(cfg *config.Config, db *sql.DB) *Server {
 		db:      db,
 		handler: handler,
 		router:  mux.NewRouter(),
+		logger:  logger,
 	}
 
 	s.setupRoutes()
@@ -86,10 +92,19 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Get secret key from header
 		secretKey := r.Header.Get("X-Secret-Key")
-		fmt.Println("Secret Key:", secretKey, s.config.ValidSecret)
+		s.logger.WithFields(logrus.Fields{
+			"secret_key": secretKey,
+			"path":       r.URL.Path,
+			"method":     r.Method,
+		}).Debug("Authenticating request")
 
 		// Validate secret key
 		if secretKey != s.config.ValidSecret {
+			s.logger.WithFields(logrus.Fields{
+				"path":   r.URL.Path,
+				"method": r.Method,
+				"ip":     r.RemoteAddr,
+			}).Warn("Invalid secret key provided")
 			http.Error(w, "Invalid secret key", http.StatusUnauthorized)
 			return
 		}
@@ -100,6 +115,6 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 }
 
 func (s *Server) Start() error {
-	log.Printf("Server starting on port %s", s.config.Port)
+	s.logger.WithField("port", s.config.Port).Info("Server starting")
 	return http.ListenAndServe(":"+s.config.Port, s.router)
 }

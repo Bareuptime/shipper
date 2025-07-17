@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -12,19 +13,23 @@ import (
 	"bastion-deployment/internal/nomad"
 
 	"github.com/gorilla/mux"
+	"github.com/sirupsen/logrus"
 )
 
 type Handler struct {
 	db     *sql.DB
 	config *config.Config
 	nomad  *nomad.Client
+	logger *logrus.Logger
 }
 
 func NewHandler(db *sql.DB, cfg *config.Config, nomadClient *nomad.Client) *Handler {
+	// Use the same logger as the nomad client for consistency
 	return &Handler{
 		db:     db,
 		config: cfg,
 		nomad:  nomadClient,
+		logger: nomadClient.GetLogger(),
 	}
 }
 
@@ -51,13 +56,18 @@ func (h *Handler) Deploy(w http.ResponseWriter, r *http.Request) {
 
 	// Store initial deployment record
 	if err := database.InsertDeployment(h.db, tagID, req.ServiceName, "", "pending"); err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
+		h.logger.WithError(err).Error("Database error inserting deployment")
+		http.Error(w, fmt.Sprintf("Database error: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	// Trigger Nomad deployment
 	jobID, err := h.nomad.TriggerDeployment(req.ServiceName, tagID)
 	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"service": req.ServiceName,
+			"tag_id":  tagID,
+		}).Error("Nomad deployment failed")
 		database.UpdateDeploymentStatus(h.db, tagID, "failed")
 		response := models.DeploymentResponse{
 			Status:  "failed",
@@ -71,8 +81,11 @@ func (h *Handler) Deploy(w http.ResponseWriter, r *http.Request) {
 
 	// Update with job ID
 	if err := database.UpdateDeploymentJobID(h.db, tagID, jobID, "running"); err != nil {
-		// Log error but don't fail the request
-		// In a production system, you'd want proper logging here
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"tag_id": tagID,
+			"job_id": jobID,
+		}).Error("Failed to update job ID in database")
+		// Continue with response even if database update fails
 	}
 
 	response := models.DeploymentResponse{
@@ -91,7 +104,8 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 
 	_, jobID, status, err := database.GetDeployment(h.db, tagID)
 	if err != nil {
-		http.Error(w, "Deployment not found", http.StatusNotFound)
+		h.logger.WithError(err).WithField("tag_id", tagID).Error("Failed to get deployment")
+		http.Error(w, fmt.Sprintf("Deployment not found: %v", err), http.StatusNotFound)
 		return
 	}
 
@@ -99,8 +113,18 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 	if status == "running" && jobID != "" {
 		nomadStatus, err := h.nomad.GetJobStatus(jobID)
 		if err == nil && nomadStatus != status {
-			database.UpdateDeploymentStatus(h.db, tagID, nomadStatus)
+			if updateErr := database.UpdateDeploymentStatus(h.db, tagID, nomadStatus); updateErr != nil {
+				h.logger.WithError(updateErr).WithFields(logrus.Fields{
+					"tag_id": tagID,
+					"status": nomadStatus,
+				}).Error("Failed to update deployment status")
+			}
 			status = nomadStatus
+		} else if err != nil {
+			h.logger.WithError(err).WithFields(logrus.Fields{
+				"job_id": jobID,
+				"tag_id": tagID,
+			}).Error("Failed to get job status from Nomad")
 		}
 	}
 
