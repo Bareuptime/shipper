@@ -11,9 +11,17 @@ services:
       - NOMAD_URL=https://10.10.85.1:4646
       - VALID_SECRET=dev-secret-key-change-this-in-production-64-characters-long
       - PORT=16166
+      - LOG_LEVEL=debug
+      - LOG_FORMAT=text
     volumes:
       - .:/app
       - /app/tmp
       - ./data:/app/data
+      - air_tmp:/app/tmp
     working_dir: /app
     restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+volumes:
+  air_tmp:

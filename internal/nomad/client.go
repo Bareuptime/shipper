@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -54,7 +55,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 		"service_name": serviceName,
 		"tag_id":       tagID,
 		"nomad_url":    c.URL,
-	}).Info("Starting deployment trigger")
+	}).Info("Starting deployment trigger111111111")
 
 	// Fetch existing job definition from Nomad
 	getURL := fmt.Sprintf("%s/v1/job/%s", c.URL, serviceName)
@@ -63,6 +64,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 		"service_name": serviceName,
 		"get_url":      getURL,
 	}).Debug("Fetching existing job definition from Nomad")
+	log.Print("Fetching existing job definition from Nomad: ", getURL)
 
 	// Create request with token header
 	req, _ := http.NewRequest("GET", getURL, nil)
@@ -96,6 +98,8 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 		}).Error("Failed to decode job definition response")
 		return "", fmt.Errorf("failed to decode job definition response: %v", err)
 	}
+
+	log.Print("Fetching existing job json definition from Nomad: ", jobSpec)
 
 	// can you print resp.body for debugging
 	c.logger.WithFields(logrus.Fields{

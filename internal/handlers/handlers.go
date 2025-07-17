@@ -20,7 +20,7 @@ type Handler struct {
 	db     *sql.DB
 	config *config.Config
 	nomad  *nomad.Client
-	logger *logrus.Logger
+	logger *logrus.Entry
 }
 
 func NewHandler(db *sql.DB, cfg *config.Config, nomadClient *nomad.Client) *Handler {

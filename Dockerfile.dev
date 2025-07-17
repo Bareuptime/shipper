@@ -18,17 +18,23 @@ RUN go install github.com/air-verse/air@latest
 
 WORKDIR /app
 
-# Copy go mod files
+# Copy go mod files first for better caching
 COPY go.mod go.sum ./
 
 # Download dependencies
 RUN go mod download
 
-# Copy source code
-COPY . .
+# Copy air config
+COPY .air.toml .air.toml
+
+# Don't copy source code here - it will be mounted as volume
+# This ensures hot reload works properly
+
+# Create tmp directory for air
+RUN mkdir -p tmp
 
 # Expose port
 EXPOSE 16166
 
 # Run with hot reload
-CMD ["air"]
+CMD ["air", "-c", ".air.toml"]
