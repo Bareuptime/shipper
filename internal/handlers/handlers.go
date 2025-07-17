@@ -10,7 +10,6 @@ import (
 	"bastion-deployment/internal/models"
 	"bastion-deployment/internal/nomad"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
 
@@ -46,8 +45,14 @@ func (h *Handler) Deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate service name
+	if !h.config.IsValidService(req.ServiceName) {
+		http.Error(w, "Invalid service name", http.StatusBadRequest)
+		return
+	}
+
 	// Generate unique tag ID
-	tagID := uuid.New().String()
+	tagID := req.TagID
 
 	// Store initial deployment record
 	if err := database.InsertDeployment(h.db, tagID, req.ServiceName, "", "pending"); err != nil {

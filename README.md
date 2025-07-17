@@ -40,6 +40,30 @@ Set environment variables:
 - `VALID_SECRET`: 64-character secret key for authentication
 - `PORT`: Server port (default: 16166)
 
+## Environment Variables
+
+The service supports the following environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NOMAD_URL` | Nomad API URL | `http://10.10.85.1:4646` |
+| `VALID_SECRET` | Secret key for API authentication | `your-64-character-secret-key-here-please-change-this-in-production` |
+| `PORT` | Server port | `16166` |
+| `VALID_SERVICES` | Comma-separated list of valid service names | (empty - allows all services) |
+| `LOG_LEVEL` | Logging level (debug, info, warn, error) | `info` |
+| `LOG_FORMAT` | Log format (json, text) | `json` |
+
+### Example Configuration
+
+```bash
+export NOMAD_URL="http://nomad.example.com:4646"
+export VALID_SECRET="your-production-secret-key-here-64-characters-long"
+export PORT="8080"
+export VALID_SERVICES="web-app,api-service,worker-service"
+export LOG_LEVEL="debug"
+export LOG_FORMAT="json"
+```
+
 ## Running
 
 ### Local Development
