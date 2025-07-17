@@ -132,17 +132,11 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 		nomadStatus, err := h.nomad.GetJobStatus(jobID)
 		if err == nil && nomadStatus != status {
 			if updateErr := database.UpdateDeploymentStatus(h.db, tagID, nomadStatus); updateErr != nil {
-				h.logger.WithError(updateErr).WithFields(logrus.Fields{
-					"tag_id": tagID,
-					"status": nomadStatus,
-				}).Error("Failed to update deployment status")
+				h.logger.WithError(updateErr).Error("Failed to update deployment status")
 			}
 			status = nomadStatus
 		} else if err != nil {
-			h.logger.WithError(err).WithFields(logrus.Fields{
-				"job_id": jobID,
-				"tag_id": tagID,
-			}).Error("Failed to get job status from Nomad")
+			h.logger.WithError(err).Error("Failed to get job status from Nomad")
 		}
 	}
 
