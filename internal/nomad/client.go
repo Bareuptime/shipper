@@ -48,15 +48,6 @@ func (c *Client) GetLogger() *logrus.Entry {
 	return c.logger
 }
 
-// Helper function to get map keys for logging
-func getMapKeys(m map[string]interface{}) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
 func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	// Create a logger instance with a request ID for this operation
 	reqLogger := logger.WithRequestIDAndModule("nomad-client")
@@ -99,8 +90,8 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 		return "", fmt.Errorf("failed to fetch job definition, Nomad returned status: %d", resp.StatusCode)
 	}
 
-	var jobResp map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&jobResp); err != nil {
+	var jobSpec map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&jobSpec); err != nil {
 		reqLogger.WithFields(logrus.Fields{
 			"service_name": serviceName,
 			"error":        err.Error(),
@@ -108,60 +99,42 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 		return "", fmt.Errorf("failed to decode job definition response: %v", err)
 	}
 
-	reqLogger.WithFields(logrus.Fields{
-		"service_name": serviceName,
-		"job_keys":     getMapKeys(jobResp),
-	}).Debug("Successfully decoded job definition response")
-
 	// Extract the job definition
-	job, ok := jobResp["Job"].(map[string]interface{})
+	job, ok := jobSpec["Job"].(map[string]interface{})
 	if !ok {
 		reqLogger.WithFields(logrus.Fields{
 			"service_name":  serviceName,
-			"job_resp_type": fmt.Sprintf("%T", jobResp["Job"]),
+			"job_resp_type": fmt.Sprintf("%T", jobSpec["Job"]),
 		}).Error("Invalid job definition format - Job field missing or wrong type")
 		return "", fmt.Errorf("invalid job definition format")
 	}
 
-	reqLogger.WithFields(logrus.Fields{
-		"service_name": serviceName,
-		"job_id":       job["ID"],
-		"job_name":     job["Name"],
-		"job_type":     job["Type"],
-		"job_keys":     getMapKeys(job),
-	}).Debug("Successfully extracted job definition")
-
-	// Append tag_id to Meta
-	if job["Meta"] == nil {
-		reqLogger.WithFields(logrus.Fields{
-			"service_name": serviceName,
-		}).Debug("Job Meta field is nil, creating new meta map")
-		job["Meta"] = make(map[string]string)
+	// Create or update the Meta field
+	newMeta := map[string]interface{}{
+		"tag_id":     tagID,
+		"timestamp":  fmt.Sprintf("%d", time.Now().Unix()),
+		"updated_by": "bastion",
 	}
 
-	meta, ok := job["Meta"].(map[string]interface{})
-	if !ok {
-		reqLogger.WithFields(logrus.Fields{
-			"service_name": serviceName,
-			"meta_type":    fmt.Sprintf("%T", job["Meta"]),
-		}).Warn("Job Meta field has wrong type, reinitializing")
-		job["Meta"] = make(map[string]string)
-		meta = job["Meta"].(map[string]interface{})
+	// If Meta already exists, preserve existing values not overridden
+	if job["Meta"] != nil {
+		if existingMeta, ok := job["Meta"].(map[string]interface{}); ok {
+			for k, v := range existingMeta {
+				if _, exists := newMeta[k]; !exists {
+					newMeta[k] = v
+				}
+			}
+		}
 	}
 
-	// Log existing meta before modification
-	reqLogger.WithFields(logrus.Fields{
-		"service_name":  serviceName,
-		"existing_meta": meta,
-	}).Debug("Current job metadata before adding tag_id")
-
-	meta["tag_id"] = tagID
+	// Update job's Meta with the new metadata
+	job["Meta"] = newMeta
 
 	reqLogger.WithFields(logrus.Fields{
 		"service_name": serviceName,
 		"tag_id":       tagID,
-		"updated_meta": meta,
-	}).Info("Successfully added tag_id to job metadata")
+		"updated_meta": newMeta,
+	}).Info("Applied metadata to job definition")
 
 	// Create the job payload with the updated job definition
 	jobPayload := map[string]interface{}{
@@ -177,6 +150,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 		}).Error("Failed to marshal job payload to JSON")
 		return "", fmt.Errorf("failed to marshal job payload: %v", err)
 	}
+
 	// Make HTTP request to Nomad
 	url := fmt.Sprintf("%s/v1/jobs", c.URL)
 
@@ -213,11 +187,6 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 		return "", fmt.Errorf("failed to submit job to Nomad: %v", err)
 	}
 	defer resp.Body.Close()
-
-	reqLogger.WithFields(logrus.Fields{
-		"service_name": serviceName,
-		"status_code":  resp.StatusCode,
-	}).Debug("Received response from Nomad job submission")
 
 	if resp.StatusCode != http.StatusOK {
 		reqLogger.WithFields(logrus.Fields{
