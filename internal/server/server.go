@@ -2,6 +2,7 @@ package server
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -85,6 +86,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Get secret key from header
 		secretKey := r.Header.Get("X-Secret-Key")
+		fmt.Println("Secret Key:", secretKey, s.config.ValidSecret)
 
 		// Validate secret key
 		if secretKey != s.config.ValidSecret {

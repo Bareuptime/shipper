@@ -24,7 +24,7 @@ func Load() *Config {
 	}
 
 	return &Config{
-		NomadURL:      getEnv("NOMAD_URL", "http://10.10.85.1:4646"),
+		NomadURL:      getEnv("NOMAD_URL", "https://10.10.85.1:4646"),
 		ValidSecret:   getEnv("VALID_SECRET", "your-64-character-secret-key-here-please-change-this-in-production"),
 		Port:          getEnv("PORT", "16166"),
 		ValidServices: validServices,
