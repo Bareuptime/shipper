@@ -25,7 +25,7 @@ func Load() *Config {
 		}
 	}
 
-	skipTLSVerifyStr := getEnv("SKIP_TLS_VERIFY", "false")
+	skipTLSVerifyStr := getEnv("SKIP_TLS_VERIFY", "true")
 	skipTLSVerify, err := strconv.ParseBool(skipTLSVerifyStr)
 	if err != nil {
 		skipTLSVerify = false
