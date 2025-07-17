@@ -78,10 +78,8 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	defer resp.Body.Close()
 
 	c.logger.WithFields(logrus.Fields{
-		"service_name":   serviceName,
-		"status_code":    resp.StatusCode,
-		"content_type":   resp.Header.Get("Content-Type"),
-		"content_length": resp.Header.Get("Content-Length"),
+		"service_name": serviceName,
+		"status_code":  resp.StatusCode,
 	}).Debug("Received response from Nomad job fetch")
 
 	if resp.StatusCode != http.StatusOK {
@@ -171,12 +169,6 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 		}).Error("Failed to marshal job payload to JSON")
 		return "", fmt.Errorf("failed to marshal job payload: %v", err)
 	}
-
-	c.logger.WithFields(logrus.Fields{
-		"service_name": serviceName,
-		"payload_size": len(payloadBytes),
-	}).Debug("Successfully marshaled job payload")
-
 	// Make HTTP request to Nomad
 	url := fmt.Sprintf("%s/v1/jobs", c.URL)
 
@@ -198,10 +190,8 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	defer resp.Body.Close()
 
 	c.logger.WithFields(logrus.Fields{
-		"service_name":   serviceName,
-		"status_code":    resp.StatusCode,
-		"content_type":   resp.Header.Get("Content-Type"),
-		"content_length": resp.Header.Get("Content-Length"),
+		"service_name": serviceName,
+		"status_code":  resp.StatusCode,
 	}).Debug("Received response from Nomad job submission")
 
 	if resp.StatusCode != http.StatusOK {
@@ -259,10 +249,8 @@ func (c *Client) GetJobStatus(evalID string) (string, error) {
 	defer resp.Body.Close()
 
 	c.logger.WithFields(logrus.Fields{
-		"eval_id":        evalID,
-		"status_code":    resp.StatusCode,
-		"content_type":   resp.Header.Get("Content-Type"),
-		"content_length": resp.Header.Get("Content-Length"),
+		"eval_id":     evalID,
+		"status_code": resp.StatusCode,
 	}).Debug("Received response from Nomad status check")
 
 	if resp.StatusCode != http.StatusOK {
