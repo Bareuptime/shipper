@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -10,6 +11,7 @@ type Config struct {
 	ValidSecret   string
 	Port          string
 	ValidServices []string
+	SkipTLSVerify bool
 }
 
 func Load() *Config {
@@ -23,11 +25,18 @@ func Load() *Config {
 		}
 	}
 
+	skipTLSVerifyStr := getEnv("SKIP_TLS_VERIFY", "false")
+	skipTLSVerify, err := strconv.ParseBool(skipTLSVerifyStr)
+	if err != nil {
+		skipTLSVerify = false
+	}
+
 	return &Config{
 		NomadURL:      getEnv("NOMAD_URL", "https://10.10.85.1:4646"),
 		ValidSecret:   getEnv("VALID_SECRET", "your-64-character-secret-key-here-please-change-this-in-production"),
 		Port:          getEnv("PORT", "16166"),
 		ValidServices: validServices,
+		SkipTLSVerify: skipTLSVerify,
 	}
 }
 

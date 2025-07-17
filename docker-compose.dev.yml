@@ -8,7 +8,7 @@ services:
     ports:
       - "16166:16166"
     environment:
-      - NOMAD_URL=http://10.10.85.1:4646
+      - NOMAD_URL=https://10.10.85.1:4646
       - VALID_SECRET=dev-secret-key-change-this-in-production-64-characters-long
       - PORT=16166
     volumes:

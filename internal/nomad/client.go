@@ -2,6 +2,7 @@ package nomad
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -19,9 +20,9 @@ type Client struct {
 	logger *logrus.Logger
 }
 
-func NewClient(url string) *Client {
+func NewClient(url string, skipTLSVerify bool) *Client {
 	logger := logrus.New()
-	logger.SetLevel(logrus.InfoLevel)
+	logger.SetLevel(logrus.DebugLevel)
 	// Use text formatter for stdout with colors
 	logger.SetFormatter(&logrus.TextFormatter{
 		TimestampFormat: time.RFC3339,
@@ -31,9 +32,19 @@ func NewClient(url string) *Client {
 	// Ensure logs go to stdout
 	logger.SetOutput(os.Stdout)
 
+	// Create custom transport with TLS verification option
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: skipTLSVerify,
+		},
+	}
+
 	return &Client{
-		URL:    url,
-		client: &http.Client{Timeout: 30 * time.Second},
+		URL: url,
+		client: &http.Client{
+			Timeout:   30 * time.Second,
+			Transport: transport,
+		},
 		logger: logger,
 	}
 }
@@ -321,7 +332,7 @@ func (c *Client) CheckServiceHealth(serviceName string) (bool, string, error) {
 	c.logger.WithFields(logrus.Fields{
 		"service_name": serviceName,
 		"get_url":      getURL,
-	}).Debug("Fetching job definition from Nomad to verify service health")
+	}).Info("Fetching job definition from Nomad to verify service health")
 
 	resp, err := c.client.Get(getURL)
 	if err != nil {

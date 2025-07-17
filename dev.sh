@@ -15,7 +15,7 @@ fi
 mkdir -p tmp
 
 # Set development environment variables
-export NOMAD_URL="http://10.10.85.1:4646"
+export NOMAD_URL="https://10.10.85.1:4646"
 export VALID_SECRET="dev-secret-key-change-this-in-production-64-characters-long"
 export PORT="16166"
 

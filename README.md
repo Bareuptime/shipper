@@ -36,7 +36,7 @@ GET /status/{tag_id}
 ## Configuration
 
 Set environment variables:
-- `NOMAD_URL`: Nomad API URL (default: http://10.10.85.1:4646)
+- `NOMAD_URL`: Nomad API URL (default: https://10.10.85.1:4646)
 - `VALID_SECRET`: 64-character secret key for authentication
 - `PORT`: Server port (default: 16166)
 
@@ -46,7 +46,7 @@ The service supports the following environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `NOMAD_URL` | Nomad API URL | `http://10.10.85.1:4646` |
+| `NOMAD_URL` | Nomad API URL | `https://10.10.85.1:4646` |
 | `VALID_SECRET` | Secret key for API authentication | `your-64-character-secret-key-here-please-change-this-in-production` |
 | `PORT` | Server port | `16166` |
 | `VALID_SERVICES` | Comma-separated list of valid service names | (empty - allows all services) |
