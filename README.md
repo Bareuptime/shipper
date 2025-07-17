@@ -43,17 +43,42 @@ Set environment variables:
 ## Running
 
 ### Local Development
+
 ```bash
 go run .
 ```
 
-### Docker
+### Hot Reload Development
+
+Install Air for hot reload:
+
+```bash
+make install-air
+```
+
+Start with hot reload:
+
+```bash
+make dev
+# or
+./dev.sh
+```
+
+### Docker Development
+
+```bash
+make dev-docker
+```
+
+### Docker Production
+
 ```bash
 docker build -t bastion-deployment .
 docker run -p 8080:8080 bastion-deployment
 ```
 
 ### Docker Compose
+
 ```bash
 docker-compose up -d
 ```

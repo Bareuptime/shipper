@@ -22,6 +22,10 @@ go.work
 # Environment variables
 .env
 
+# Hot reload temp files
+tmp/
+build-errors.log
+
 # IDE files
 .vscode/
 .idea/

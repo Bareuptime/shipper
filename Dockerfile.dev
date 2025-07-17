@@ -1,0 +1,25 @@
+# Development Dockerfile with hot reload
+FROM golang:1.24-alpine AS dev
+
+# Install required packages
+RUN apk add --no-cache gcc musl-dev sqlite-dev
+
+# Install Air for hot reload
+RUN go install github.com/air-verse/air@latest
+
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Expose port
+EXPOSE 8080
+
+# Run with hot reload
+CMD ["air"]
