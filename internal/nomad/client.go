@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"bastion-deployment/internal/models"
@@ -21,9 +22,14 @@ type Client struct {
 func NewClient(url string) *Client {
 	logger := logrus.New()
 	logger.SetLevel(logrus.InfoLevel)
-	logger.SetFormatter(&logrus.JSONFormatter{
+	// Use text formatter for stdout with colors
+	logger.SetFormatter(&logrus.TextFormatter{
 		TimestampFormat: time.RFC3339,
+		FullTimestamp:   true,
+		ForceColors:     true,
 	})
+	// Ensure logs go to stdout
+	logger.SetOutput(os.Stdout)
 
 	return &Client{
 		URL:    url,
