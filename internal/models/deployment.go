@@ -4,7 +4,6 @@ import "time"
 
 type DeploymentRequest struct {
 	ServiceName string `json:"service_name"`
-	SecretKey   string `json:"secret_key"`
 	TagID       string `json:"tag_id"`
 }
 

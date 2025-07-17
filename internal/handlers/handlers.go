@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"bastion-deployment/internal/config"
 	"bastion-deployment/internal/database"
@@ -29,19 +30,13 @@ func NewHandler(db *sql.DB, cfg *config.Config, nomadClient *nomad.Client) *Hand
 
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
+	json.NewEncoder(w).Encode(map[string]string{"status": "healthy", "time": time.Now().Format(time.RFC3339)})
 }
 
 func (h *Handler) Deploy(w http.ResponseWriter, r *http.Request) {
 	var req models.DeploymentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	// Validate secret key
-	if req.SecretKey != h.config.ValidSecret {
-		http.Error(w, "Invalid secret key", http.StatusUnauthorized)
 		return
 	}
 

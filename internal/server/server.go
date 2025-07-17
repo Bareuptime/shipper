@@ -67,14 +67,34 @@ func NewServer(cfg *config.Config, db *sql.DB) *Server {
 }
 
 func (s *Server) setupRoutes() {
-	// Health endpoint
+	// Health endpoint (unprotected)
 	s.router.HandleFunc("/health", s.handler.Health).Methods("GET")
 
+	// Protected routes with secret key validation
+	protectedRouter := s.router.PathPrefix("").Subrouter()
+	protectedRouter.Use(s.authMiddleware)
+
 	// Deploy endpoint
-	s.router.HandleFunc("/deploy", s.handler.Deploy).Methods("POST")
+	protectedRouter.HandleFunc("/deploy", s.handler.Deploy).Methods("POST")
 
 	// Status endpoint
-	s.router.HandleFunc("/status/{tag_id}", s.handler.Status).Methods("GET")
+	protectedRouter.HandleFunc("/status/{tag_id}", s.handler.Status).Methods("GET")
+}
+
+func (s *Server) authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Get secret key from header
+		secretKey := r.Header.Get("X-Secret-Key")
+
+		// Validate secret key
+		if secretKey != s.config.ValidSecret {
+			http.Error(w, "Invalid secret key", http.StatusUnauthorized)
+			return
+		}
+
+		// Continue to next handler
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) Start() error {
