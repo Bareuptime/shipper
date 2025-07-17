@@ -17,7 +17,7 @@ func init() {
 
 func main() {
 	log.Println("Starting Bastion Deployment Service")
-	
+
 	// Load configuration
 	cfg := config.Load()
 	log.Println("Configuration loaded successfully")

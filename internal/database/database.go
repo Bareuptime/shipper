@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -10,7 +11,7 @@ import (
 func InitDB() *sql.DB {
 	log.Println("Initializing database connection")
 	dbPath := "./bastion.db"
-	
+
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		log.Fatal("Failed to open database:", err)

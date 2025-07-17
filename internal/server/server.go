@@ -25,7 +25,7 @@ type Server struct {
 func NewServer(cfg *config.Config, db *sql.DB) *Server {
 	// Create a shared logger
 	logger := logrus.New()
-	
+
 	// Configure logger based on environment
 	logLevel := strings.ToLower(os.Getenv("LOG_LEVEL"))
 	switch logLevel {
@@ -53,7 +53,7 @@ func NewServer(cfg *config.Config, db *sql.DB) *Server {
 			TimestampFormat: "2006-01-02T15:04:05.000Z07:00",
 		})
 	}
-	
+
 	// Create Nomad client with the shared logger
 	nomadClient := nomad.NewClient(cfg.NomadURL)
 	nomadClient.SetLogLevel(logger.Level)
