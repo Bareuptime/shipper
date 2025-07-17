@@ -97,7 +97,7 @@ The API remains the same:
 Environment variables:
 - `NOMAD_URL` - Nomad cluster URL (default: http://10.10.85.1:4646)
 - `VALID_SECRET` - Secret key for authentication
-- `PORT` - Server port (default: 8080)
+- `PORT` - Server port (default: 16166)
 
 ## Testing
 

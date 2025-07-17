@@ -33,7 +33,7 @@ COPY --from=builder /app/bastion-deployment .
 RUN mkdir -p /root/data
 
 # Expose port
-EXPOSE 8080
+EXPOSE 16166
 
 # Run the binary
 CMD ["./bastion-deployment"]

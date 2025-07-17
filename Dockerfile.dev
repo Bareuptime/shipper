@@ -19,7 +19,7 @@ RUN go mod download
 COPY . .
 
 # Expose port
-EXPOSE 8080
+EXPOSE 16166
 
 # Run with hot reload
 CMD ["air"]

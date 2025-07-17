@@ -4,11 +4,11 @@ services:
   bastion-deployment:
     build: .
     ports:
-      - "8080:8080"
+      - "16166:16166"
     environment:
       - NOMAD_URL=http://10.10.85.1:4646
       - VALID_SECRET=your-64-character-secret-key-here-please-change-this-in-production
-      - PORT=8080
+      - PORT=16166
     volumes:
       - ./data:/root/data
     restart: unless-stopped

@@ -38,7 +38,7 @@ GET /status/{tag_id}
 Set environment variables:
 - `NOMAD_URL`: Nomad API URL (default: http://10.10.85.1:4646)
 - `VALID_SECRET`: 64-character secret key for authentication
-- `PORT`: Server port (default: 8080)
+- `PORT`: Server port (default: 16166)
 
 ## Running
 
@@ -74,7 +74,7 @@ make dev-docker
 
 ```bash
 docker build -t bastion-deployment .
-docker run -p 8080:8080 bastion-deployment
+docker run -p 16166:16166 bastion-deployment
 ```
 
 ### Docker Compose

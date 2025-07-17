@@ -17,12 +17,12 @@ mkdir -p tmp
 # Set development environment variables
 export NOMAD_URL="http://10.10.85.1:4646"
 export VALID_SECRET="dev-secret-key-change-this-in-production-64-characters-long"
-export PORT="8080"
+export PORT="16166"
 
 echo "🔥 Starting hot reload server..."
 echo "📝 Edit main.go and save to see changes automatically reload"
-echo "🌐 Server will be available at http://localhost:8080"
-echo "❤️  Health check: http://localhost:8080/health"
+echo "🌐 Server will be available at http://localhost:16166"
+echo "❤️  Health check: http://localhost:16166/health"
 echo "🛑 Press Ctrl+C to stop"
 
 # Start Air for hot reload

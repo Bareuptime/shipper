@@ -12,15 +12,15 @@ run:
 install-air:
 	go install github.com/air-verse/air@latest
 
-# Run with hot reload for development
+# Run with hot reload for development (Docker-based)
 dev:
+	docker-compose -f docker-compose.dev.yml up --build
+
+# Run with hot reload for development (local - requires air)
+dev-local:
 	air
 
-# Run development script
-dev-script:
-	./dev.sh
-
-# Run with Docker hot reload
+# Run with Docker hot reload (alias for dev)
 dev-docker:
 	docker-compose -f docker-compose.dev.yml up --build
 

@@ -22,14 +22,14 @@ type Server struct {
 func NewServer(cfg *config.Config, db *sql.DB) *Server {
 	nomadClient := nomad.NewClient(cfg.NomadURL)
 	handler := handlers.NewHandler(db, cfg, nomadClient)
-	
+
 	s := &Server{
 		config:  cfg,
 		db:      db,
 		handler: handler,
 		router:  mux.NewRouter(),
 	}
-	
+
 	s.setupRoutes()
 	return s
 }
@@ -37,10 +37,10 @@ func NewServer(cfg *config.Config, db *sql.DB) *Server {
 func (s *Server) setupRoutes() {
 	// Health endpoint
 	s.router.HandleFunc("/health", s.handler.Health).Methods("GET")
-	
+
 	// Deploy endpoint
 	s.router.HandleFunc("/deploy", s.handler.Deploy).Methods("POST")
-	
+
 	// Status endpoint
 	s.router.HandleFunc("/status/{tag_id}", s.handler.Status).Methods("GET")
 }
