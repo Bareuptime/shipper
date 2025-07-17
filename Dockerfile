@@ -1,8 +1,17 @@
 # Build stage
 FROM golang:1.24-alpine AS builder
 
-# Install required packages
-RUN apk add --no-cache gcc musl-dev sqlite-dev
+# Install required packages for CGO and SQLite
+RUN apk add --no-cache \
+    gcc \
+    musl-dev \
+    sqlite-dev \
+    build-base
+
+# Set CGO environment and SQLite build tags
+ENV CGO_ENABLED=1
+ENV GOOS=linux
+ENV CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
 
 WORKDIR /app
 
@@ -16,7 +25,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o bastion-deployment ./cmd/bastion
+RUN go build -tags 'sqlite_omit_load_extension' -a -installsuffix cgo -o bastion-deployment ./cmd/bastion
 
 # Runtime stage
 FROM alpine:latest
