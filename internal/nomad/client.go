@@ -181,13 +181,12 @@ func (c *Client) GetJobStatus(evalID string) (string, error) {
 		"nomad_url": c.URL,
 	}).Info("Starting job status check")
 
-	client := &http.Client{Timeout: 10 * time.Second}
 	url := fmt.Sprintf("%s/v1/evaluation/%s", c.URL, evalID)
 
 	c.logger.WithFields(logrus.Fields{
 		"eval_id":    evalID,
 		"status_url": url,
-		"timeout":    "10s",
+		"timeout":    "30s",
 	}).Debug("Making request to get evaluation status")
 
 	// Create request with token header
@@ -206,7 +205,7 @@ func (c *Client) GetJobStatus(evalID string) (string, error) {
 		req.Header.Add("X-Nomad-Token", c.Token)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		c.logger.WithFields(logrus.Fields{
 			"eval_id":    evalID,
