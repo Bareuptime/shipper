@@ -2,11 +2,11 @@
 
 # Build the Go application
 build:
-	go build -o bastion-deployment .
+	go build -o bastion-deployment ./cmd/bastion
 
 # Run the application locally
 run:
-	go run .
+	go run ./cmd/bastion
 
 # Install Air for hot reload
 install-air:

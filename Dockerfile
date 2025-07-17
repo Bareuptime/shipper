@@ -16,7 +16,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o bastion-deployment .
+RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o bastion-deployment ./cmd/bastion
 
 # Runtime stage
 FROM alpine:latest
