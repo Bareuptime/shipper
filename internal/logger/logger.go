@@ -51,7 +51,7 @@ func Initialize() *logrus.Logger {
 	} else {
 		// Default to JSON format
 		logger.SetFormatter(&logrus.JSONFormatter{
-			TimestampFormat: "2006-01-02T15:04:05.000Z07:00",
+			TimestampFormat:  "2006-01-02T15:04:05.000Z07:00",
 			CallerPrettyfier: callerPrettyfier,
 		})
 	}
