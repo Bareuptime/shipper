@@ -79,6 +79,6 @@ jobs:
           --header 'X-Secret-Key: ${{ secrets.DEPLOYMENT_SECRET_KEY }}' \
           --header 'Content-Type: application/json' \
           --data '{
-            "service_name": "bareuptime-backend",
+            "service_name": "bareuptime-bastion",
             "tag_id": "${{ github.sha }}"
           }'
