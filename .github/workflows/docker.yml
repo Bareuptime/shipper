@@ -72,3 +72,13 @@ jobs:
         platforms: linux/amd64
         cache-from: type=gha
         cache-to: type=gha,mode=max
+    - name: Deploy to production
+      if: github.event_name != 'pull_request'
+      run: |
+        curl --location 'https://bastion.bareuptime.co/deploy' \
+          --header 'X-Secret-Key: ${{ secrets.DEPLOYMENT_SECRET_KEY }}' \
+          --header 'Content-Type: application/json' \
+          --data '{
+            "service_name": "bareuptime-backend",
+            "tag_id": "${{ github.sha }}"
+          }'
