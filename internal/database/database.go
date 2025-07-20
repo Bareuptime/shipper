@@ -10,7 +10,7 @@ import (
 
 func InitDB() *sql.DB {
 	log.Println("Initializing database connection")
-	dbPath := "./bastion.db"
+	dbPath := "/opt/data/bastion.db"
 
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
