@@ -7,7 +7,7 @@ services:
       - "16166:16166"
     environment:
       - NOMAD_URL=https://10.10.85.1:4646
-      - VALID_SECRET=your-64-character-secret-key-here-please-change-this-in-production
+      - RPC_SECRET=your-64-character-secret-key-here-please-change-this-in-production
       - PORT=16166
     volumes:
       - ./data:/root/data
