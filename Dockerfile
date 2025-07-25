@@ -30,8 +30,19 @@ RUN go build -tags 'sqlite_omit_load_extension' -a -installsuffix cgo -o shipper
 # Runtime stage
 FROM alpine:latest
 
-# Install sqlite
-RUN apk add --no-cache sqlite
+# Install sqlite and tools for Nomad
+RUN apk add --no-cache \
+    sqlite \
+    wget \
+    unzip \
+    ca-certificates
+
+# Download and install Nomad
+RUN wget https://releases.hashicorp.com/nomad/1.9.7/nomad_1.9.7_linux_amd64.zip -O /tmp/nomad.zip && \
+    unzip /tmp/nomad.zip -d /tmp && \
+    mv /tmp/nomad /usr/local/bin/nomad && \
+    chmod +x /usr/local/bin/nomad && \
+    rm /tmp/nomad.zip
 
 WORKDIR /root/
 

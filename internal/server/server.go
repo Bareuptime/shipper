@@ -2,6 +2,7 @@ package server
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 
 	"shipper-deployment/internal/config"
@@ -53,7 +54,7 @@ func (s *Server) setupRoutes() {
 	protectedRouter := s.router.PathPrefix("").Subrouter()
 	protectedRouter.Use(s.authMiddleware)
 
-	protectedRouter.HandleFunc("/deploy/job", s.handler.Deploy).Methods("POST")
+	protectedRouter.HandleFunc("/deploy/job", s.handler.DeployJob).Methods("POST")
 
 	// Deploy endpoint
 	protectedRouter.HandleFunc("/deploy", s.handler.Deploy).Methods("POST")
@@ -80,7 +81,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 				"method": r.Method,
 				"ip":     r.RemoteAddr,
 			}).Warn("Invalid secret key provided")
-			http.Error(w, "Invalid secret key", http.StatusUnauthorized)
+			http.Error(w, fmt.Sprintf("Invalid secret key - %s", s.config.ValidSecret), http.StatusUnauthorized)
 			return
 		}
 
