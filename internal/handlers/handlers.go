@@ -4,7 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"os/exec"
 	"time"
 
 	"shipper-deployment/internal/config"
@@ -36,6 +39,139 @@ func NewHandler(db *sql.DB, cfg *config.Config, nomadClient *nomad.Client) *Hand
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "healthy", "time": time.Now().Format(time.RFC3339)})
+}
+
+func (h *Handler) DeployJob(w http.ResponseWriter, r *http.Request) {
+	// Parse multipart form data (max 1MB)
+	err := r.ParseMultipartForm(1024 * 1024) // 1MB
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to parse multipart form")
+		http.Error(w, "Failed to parse multipart form", http.StatusBadRequest)
+		return
+	}
+
+	// Get tag_id from form
+	tagID := r.FormValue("tag_id")
+	if tagID == "" {
+		h.logger.Error("Tag ID is missing in request")
+		http.Error(w, "Tag ID is required", http.StatusBadRequest)
+		return
+	}
+
+	h.logger.WithField("tag_id", tagID).Info("Job deployment request received")
+
+	// Get the uploaded job file
+	file, fileHeader, err := r.FormFile("job_file")
+	if err != nil {
+		h.logger.WithError(err).Error("Job file is missing in request")
+		http.Error(w, "Job file is required", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Check file size limit (1MB)
+	if fileHeader.Size > 1024*1024 {
+		h.logger.WithField("size", fileHeader.Size).Error("Job file exceeds 1MB limit")
+		http.Error(w, "Job file exceeds 1MB limit", http.StatusBadRequest)
+		return
+	}
+
+	// Read file content
+	jobFileContent, err := io.ReadAll(file)
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to read job file content")
+		http.Error(w, "Failed to read job file content", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if deployment already exists
+	_, _, _, err = database.GetDeployment(h.db, tagID)
+	if err == nil {
+		// Deployment exists
+		h.logger.WithField("tag_id", tagID).Error("Deployment with this tag_id already exists")
+		http.Error(w, fmt.Sprintf("A deployment with tag_id %s already exists", tagID), http.StatusConflict)
+		return
+	}
+
+	// Create temporary file in /tmp location
+	tmpFile := fmt.Sprintf("/tmp/nomad-job-%s.hcl", tagID)
+	if err := os.WriteFile(tmpFile, jobFileContent, 0644); err != nil {
+		h.logger.WithError(err).Error("Failed to write job file to tmp location")
+		http.Error(w, "Failed to write job file", http.StatusInternalServerError)
+		return
+	}
+	defer os.Remove(tmpFile) // Clean up temporary file
+
+	h.logger.WithField("tmp_file", tmpFile).Info("Job file written to tmp location")
+
+	// Validate Nomad job file
+	validateCmd := exec.Command("nomad", "job", "validate", tmpFile)
+	if output, err := validateCmd.CombinedOutput(); err != nil {
+		h.logger.WithError(err).WithField("output", string(output)).Error("Nomad job validation failed")
+		http.Error(w, fmt.Sprintf("Job validation failed: %s", string(output)), http.StatusBadRequest)
+		return
+	}
+
+	h.logger.Info("Job file validation successful")
+
+	// Convert HCL to JSON
+	convertCmd := exec.Command("nomad", "job", "inspect", "-json", tmpFile)
+	jsonOutput, err := convertCmd.Output()
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to convert job file to JSON")
+		http.Error(w, "Failed to convert job file to JSON", http.StatusInternalServerError)
+		return
+	}
+
+	// Parse JSON output
+	var jobJSON map[string]interface{}
+	if err := json.Unmarshal(jsonOutput, &jobJSON); err != nil {
+		h.logger.WithError(err).Error("Failed to parse converted JSON")
+		http.Error(w, "Failed to parse converted JSON", http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("Job file converted to JSON successfully")
+
+	// Store initial deployment record (without service name for job deployments)
+	if err := database.InsertDeployment(h.db, tagID, "", "", "pending"); err != nil {
+		h.logger.WithError(err).Error("Database error inserting deployment")
+		http.Error(w, fmt.Sprintf("Database error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Submit job to Nomad
+	jobID, err := h.nomad.SubmitJobFile(jobJSON, tagID)
+	if err != nil {
+		h.logger.WithError(err).WithField("tag_id", tagID).Error("Nomad job submission failed")
+		database.UpdateDeploymentStatus(h.db, tagID, "failed")
+		response := models.DeploymentResponse{
+			Status:  "failed",
+			TagID:   tagID,
+			Message: err.Error(),
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Update with job ID
+	if err := database.UpdateDeploymentJobID(h.db, tagID, jobID, "running"); err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"tag_id": tagID,
+			"job_id": jobID,
+		}).Error("Failed to update job ID in database")
+		// Continue with response even if database update fails
+	}
+
+	response := models.DeploymentResponse{
+		Status: "running",
+		TagID:  tagID,
+		JobID:  jobID,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 func (h *Handler) Deploy(w http.ResponseWriter, r *http.Request) {

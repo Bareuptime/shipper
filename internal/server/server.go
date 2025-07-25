@@ -53,11 +53,14 @@ func (s *Server) setupRoutes() {
 	protectedRouter := s.router.PathPrefix("").Subrouter()
 	protectedRouter.Use(s.authMiddleware)
 
+	protectedRouter.HandleFunc("/deploy/job", s.handler.Deploy).Methods("POST")
+
 	// Deploy endpoint
 	protectedRouter.HandleFunc("/deploy", s.handler.Deploy).Methods("POST")
 
 	// Status endpoint
 	protectedRouter.HandleFunc("/status/{tag_id}", s.handler.Status).Methods("GET")
+
 }
 
 func (s *Server) authMiddleware(next http.Handler) http.Handler {

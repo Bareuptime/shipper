@@ -265,3 +265,87 @@ func (c *Client) GetJobStatus(evalID string) (string, error) {
 
 	return mappedStatus, nil
 }
+
+// SubmitJobFile submits a Nomad job file directly to Nomad
+func (c *Client) SubmitJobFile(jobJSON map[string]interface{}, tagID string) (string, error) {
+	c.logger.WithFields(logrus.Fields{
+		"tag_id":    tagID,
+		"nomad_url": c.URL,
+	}).Info("Starting job file submission")
+
+	// Add metadata to the job
+	if job, ok := jobJSON["Job"].(map[string]interface{}); ok {
+		newMeta := map[string]interface{}{
+			"tag_id":     tagID,
+			"timestamp":  fmt.Sprintf("%d", time.Now().Unix()),
+			"updated_by": "shipper",
+		}
+		job["Meta"] = newMeta
+	}
+
+	// Convert to JSON
+	payloadBytes, err := json.Marshal(jobJSON)
+	if err != nil {
+		c.logger.WithFields(logrus.Fields{
+			"tag_id": tagID,
+			"error":  err.Error(),
+		}).Error("Failed to marshal job JSON")
+		return "", fmt.Errorf("failed to marshal job JSON: %v", err)
+	}
+
+	// Make HTTP request to Nomad
+	url := fmt.Sprintf("%s/v1/jobs", c.URL)
+
+	c.logger.Info("Submitting job file to Nomad")
+
+	// Create POST request with token header
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		c.logger.WithFields(logrus.Fields{
+			"tag_id":   tagID,
+			"post_url": url,
+			"error":    err.Error(),
+		}).Error("Failed to create POST request")
+		return "", fmt.Errorf("failed to create POST request: %v", err)
+	}
+
+	// Set content type and add token header
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Add("X-Nomad-Token", c.Token)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		c.logger.WithFields(logrus.Fields{
+			"tag_id":   tagID,
+			"post_url": url,
+			"error":    err.Error(),
+		}).Error("Failed to submit job file to Nomad")
+		return "", fmt.Errorf("failed to submit job file to Nomad: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.logger.WithFields(logrus.Fields{
+			"tag_id":      tagID,
+			"status_code": resp.StatusCode,
+		}).Error("Nomad returned non-200 status for job file submission")
+		return "", fmt.Errorf("nomad returned status: %d", resp.StatusCode)
+	}
+
+	var nomadResp models.NomadJobResponse
+	if err := json.NewDecoder(resp.Body).Decode(&nomadResp); err != nil {
+		c.logger.WithFields(logrus.Fields{
+			"tag_id": tagID,
+			"error":  err.Error(),
+		}).Error("Failed to decode Nomad job file submission response")
+		return "", fmt.Errorf("failed to decode Nomad response: %v", err)
+	}
+
+	c.logger.WithFields(logrus.Fields{
+		"tag_id":  tagID,
+		"eval_id": nomadResp.EvalID,
+		"job_id":  nomadResp.JobID,
+	}).Info("Successfully submitted job file")
+
+	return nomadResp.EvalID, nil
+}

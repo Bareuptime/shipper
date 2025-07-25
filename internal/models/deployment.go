@@ -4,7 +4,7 @@ import "time"
 
 type DeploymentRequest struct {
 	ServiceName string `json:"service_name"`
-	TagID       string `json:"tag_id,tag-id"` // Support both tag_id and tag-id formats
+	TagID       string `json:"tag_id"` // Support tag_id format
 }
 
 type DeploymentResponse struct {
