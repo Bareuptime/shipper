@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Development script for bastion-deployment
+# Development script for shipper-deployment
 # This script sets up the development environment with hot reload
 
 echo "🚀 Setting up development environment..."

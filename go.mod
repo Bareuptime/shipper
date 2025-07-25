@@ -1,4 +1,4 @@
-module bastion-deployment
+module shipper-deployment
 
 go 1.21
 

@@ -2,11 +2,11 @@
 
 # Build the Go application
 build:
-	go build -o bastion-deployment ./cmd/bastion
+	go build -o shipper-deployment ./cmd/shipper
 
 # Run the application locally
 run:
-	go run ./cmd/bastion
+	go run ./cmd/shipper
 
 # Install Air for hot reload
 install-air:
@@ -26,7 +26,7 @@ dev-docker:
 
 # Build Docker image
 docker-build:
-	docker build -t bastion-deployment .
+	docker build -t shipper-deployment .
 
 # Run with Docker Compose
 docker-run:
@@ -38,8 +38,8 @@ docker-stop:
 
 # Clean build artifacts
 clean:
-	rm -f bastion-deployment
-	rm -f bastion.db
+	rm -f shipper-deployment
+	rm -f shipper.db
 	rm -rf tmp/
 
 # Run tests

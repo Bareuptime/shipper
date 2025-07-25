@@ -4,9 +4,9 @@ import (
 	"log"
 	"os"
 
-	"bastion-deployment/internal/config"
-	"bastion-deployment/internal/database"
-	"bastion-deployment/internal/server"
+	"shipper-deployment/internal/config"
+	"shipper-deployment/internal/database"
+	"shipper-deployment/internal/server"
 )
 
 func init() {
@@ -16,7 +16,7 @@ func init() {
 }
 
 func main() {
-	log.Println("Starting Bastion Deployment Service")
+	log.Println("Starting shipper Deployment Service")
 
 	// Load configuration
 	cfg := config.Load()

@@ -4,10 +4,10 @@ import (
 	"database/sql"
 	"net/http"
 
-	"bastion-deployment/internal/config"
-	"bastion-deployment/internal/handlers"
-	"bastion-deployment/internal/logger"
-	"bastion-deployment/internal/nomad"
+	"shipper-deployment/internal/config"
+	"shipper-deployment/internal/handlers"
+	"shipper-deployment/internal/logger"
+	"shipper-deployment/internal/nomad"
 
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"

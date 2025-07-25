@@ -1,4 +1,4 @@
-# Bastion Deployment Service
+# shipper Deployment Service
 
 A lightweight Go service that acts as a jump server for deploying services to Nomad.
 
@@ -97,8 +97,8 @@ make dev-docker
 ### Docker Production
 
 ```bash
-docker build -t bastion-deployment .
-docker run -p 16166:16166 bastion-deployment
+docker build -t shipper-deployment .
+docker run -p 16166:16166 shipper-deployment
 ```
 
 ### Docker Compose

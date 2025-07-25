@@ -25,7 +25,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN go build -tags 'sqlite_omit_load_extension' -a -installsuffix cgo -o bastion-deployment ./cmd/bastion
+RUN go build -tags 'sqlite_omit_load_extension' -a -installsuffix cgo -o shipper-deployment ./cmd/shipper
 
 # Runtime stage
 FROM alpine:latest
@@ -36,7 +36,7 @@ RUN apk add --no-cache sqlite
 WORKDIR /root/
 
 # Copy the binary from builder stage
-COPY --from=builder /app/bastion-deployment .
+COPY --from=builder /app/shipper-deployment .
 
 # Create directory for database
 RUN mkdir -p /root/data
@@ -45,4 +45,4 @@ RUN mkdir -p /root/data
 EXPOSE 16166
 
 # Run the binary
-CMD ["./bastion-deployment"]
+CMD ["./shipper-deployment"]

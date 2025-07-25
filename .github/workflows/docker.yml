@@ -35,7 +35,7 @@ jobs:
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
 
     - name: Build Go binary
-      run: go build -o bastion-deployment .
+      run: go build -o shipper-deployment .
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -75,10 +75,10 @@ jobs:
     - name: Deploy to production
       if: github.event_name != 'pull_request'
       run: |
-        curl --location 'https://bastion.bareuptime.co/deploy' \
+        curl --location 'https://shipper.bareuptime.co/deploy' \
           --header 'X-Secret-Key: ${{ secrets.DEPLOYMENT_SECRET_KEY }}' \
           --header 'Content-Type: application/json' \
           --data '{
-            "service_name": "bareuptime-bastion",
+            "service_name": "bareuptime-shipper",
             "tag_id": "${{ github.sha }}"
           }'

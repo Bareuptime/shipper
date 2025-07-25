@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"time"
 
-	"bastion-deployment/internal/config"
-	"bastion-deployment/internal/database"
-	"bastion-deployment/internal/models"
-	"bastion-deployment/internal/nomad"
+	"shipper-deployment/internal/config"
+	"shipper-deployment/internal/database"
+	"shipper-deployment/internal/models"
+	"shipper-deployment/internal/nomad"
 
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"

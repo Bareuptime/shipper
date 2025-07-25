@@ -1,13 +1,13 @@
-# Bastion Deployment Service - Project Structure
+# shipper Deployment Service - Project Structure
 
 This project has been restructured to follow Go best practices and improve maintainability.
 
 ## Project Structure
 
 ```
-bastion-deployment/
+shipper-deployment/
 ├── cmd/
-│   └── bastion/
+│   └── shipper/
 │       └── main.go              # Application entry point
 ├── internal/
 │   ├── config/
@@ -30,14 +30,14 @@ bastion-deployment/
 ├── Makefile
 ├── go.mod
 ├── go.sum
-├── main.go                     # Simplified entry point (same as cmd/bastion/main.go)
+├── main.go                     # Simplified entry point (same as cmd/shipper/main.go)
 └── main.go.backup             # Backup of original monolithic file
 ```
 
 ## Key Improvements
 
 ### 1. **Separation of Concerns**
-- **cmd/bastion/**: Application entry point
+- **cmd/shipper/**: Application entry point
 - **internal/config/**: Configuration management
 - **internal/database/**: Database operations
 - **internal/handlers/**: HTTP request handlers

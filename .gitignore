@@ -46,4 +46,4 @@ Thumbs.db
 data/
 
 # Build artifacts
-bastion-deployment
+shipper-deployment

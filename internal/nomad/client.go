@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"time"
 
-	"bastion-deployment/internal/logger"
-	"bastion-deployment/internal/models"
+	"shipper-deployment/internal/logger"
+	"shipper-deployment/internal/models"
 
 	"github.com/sirupsen/logrus"
 )
@@ -111,7 +111,7 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	newMeta := map[string]interface{}{
 		"tag_id":     tagID,
 		"timestamp":  fmt.Sprintf("%d", time.Now().Unix()),
-		"updated_by": "bastion",
+		"updated_by": "shipper",
 	}
 	jobSpec["Meta"] = newMeta
 

@@ -5,7 +5,7 @@ tmp_dir = "tmp"
 [build]
   args_bin = []
   bin = "./tmp/main"
-  cmd = "CGO_CFLAGS='-D_LARGEFILE64_SOURCE' go build -tags 'sqlite_omit_load_extension' -o ./tmp/main ./cmd/bastion"
+  cmd = "CGO_CFLAGS='-D_LARGEFILE64_SOURCE' go build -tags 'sqlite_omit_load_extension' -o ./tmp/main ./cmd/shipper"
   env = {"LOG_LEVEL"="debug", "LOG_FORMAT"="text"}
   delay = 1000
   exclude_dir = ["assets", "tmp", "vendor", "testdata"]

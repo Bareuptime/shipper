@@ -1,16 +1,16 @@
 package main
 
 import (
-	"bastion-deployment/internal/config"
-	"bastion-deployment/internal/database"
-	"bastion-deployment/internal/logger"
-	"bastion-deployment/internal/server"
+	"shipper-deployment/internal/config"
+	"shipper-deployment/internal/database"
+	"shipper-deployment/internal/logger"
+	"shipper-deployment/internal/server"
 )
 
 func main() {
 	// Initialize global logger
 	appLogger := logger.Initialize()
-	appLogger.Info("Bastion Deployment Service starting")
+	appLogger.Info("shipper Deployment Service starting")
 
 	// Load configuration
 	cfg := config.Load()
