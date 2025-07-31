@@ -11,6 +11,7 @@ import (
 	"shipper-deployment/internal/nomad"
 
 	"github.com/gorilla/mux"
+	"github.com/newrelic/go-agent/v3/newrelic"
 	"github.com/sirupsen/logrus"
 )
 
@@ -20,9 +21,10 @@ type Server struct {
 	handler *handlers.Handler
 	router  *mux.Router
 	logger  *logrus.Entry
+	nrApp   *newrelic.Application
 }
 
-func NewServer(cfg *config.Config, db *sql.DB) *Server {
+func NewServer(cfg *config.Config, db *sql.DB, nrApp *newrelic.Application) *Server {
 	// Initialize the global logger
 	logger.Initialize()
 
@@ -40,6 +42,7 @@ func NewServer(cfg *config.Config, db *sql.DB) *Server {
 		handler: handler,
 		router:  mux.NewRouter(),
 		logger:  serverLogger,
+		nrApp:   nrApp,
 	}
 
 	s.setupRoutes()
@@ -47,6 +50,11 @@ func NewServer(cfg *config.Config, db *sql.DB) *Server {
 }
 
 func (s *Server) setupRoutes() {
+	// Add New Relic middleware if available
+	if s.nrApp != nil {
+		s.router.Use(s.newRelicMiddleware)
+	}
+
 	// Health endpoint (unprotected)
 	s.router.HandleFunc("/health", s.handler.Health).Methods("GET")
 
@@ -90,7 +98,33 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// newRelicMiddleware wraps HTTP handlers with New Relic monitoring
+func (s *Server) newRelicMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.nrApp == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Create New Relic transaction
+		txn := s.nrApp.StartTransaction(r.Method + " " + r.URL.Path)
+		defer txn.End()
+
+		// Add request attributes
+		txn.AddAttribute("http.method", r.Method)
+		txn.AddAttribute("http.url", r.URL.String())
+		txn.AddAttribute("user.agent", r.Header.Get("User-Agent"))
+
+		// Wrap response writer to capture response code
+		wrappedWriter := txn.SetWebResponse(w)
+		r = newrelic.RequestWithTransactionContext(r, txn)
+
+		// Continue to next handler
+		next.ServeHTTP(wrappedWriter, r)
+	})
+}
+
 func (s *Server) Start() error {
-	s.logger.WithField("port", s.config.Port).Info("Server starting")
+	s.logger.WithField("port", s.config.Port).Info("Server starting1")
 	return http.ListenAndServe(":"+s.config.Port, s.router)
 }
