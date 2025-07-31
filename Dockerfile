@@ -38,12 +38,6 @@ RUN apk add --no-cache \
     ca-certificates
 
 # Download and install Nomad
-RUN wget https://releases.hashicorp.com/nomad/1.9.7/nomad_1.9.7_linux_amd64.zip -O /tmp/nomad.zip && \
-    unzip /tmp/nomad.zip -d /tmp && \
-    mv /tmp/nomad /usr/local/bin/nomad && \
-    chmod +x /usr/local/bin/nomad && \
-    rm /tmp/nomad.zip
-
 WORKDIR /root/
 
 # Copy the binary from builder stage

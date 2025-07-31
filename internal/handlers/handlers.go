@@ -1,13 +1,13 @@
 package handlers
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"time"
 
 	"shipper-deployment/internal/config"
@@ -145,39 +145,15 @@ func (h *Handler) DeployJob(w http.ResponseWriter, r *http.Request) {
 
 	h.logger.WithField("tmp_file", tmpFile).Info("Job file written to tmp location")
 
-	// Validate Nomad job file (optional - skip if nomad command fails)
-	validateCmd := exec.Command("nomad", "job", "validate", tmpFile)
-	if output, err := validateCmd.CombinedOutput(); err != nil {
-		h.logger.WithError(err).WithField("output", string(output)).Warn("Nomad job validation failed - continuing without validation")
-		// Don't return error, just log warning and continue
-	} else {
-		h.logger.Info("Job file validation successful")
+	// Validate Nomad job file using Nomad's parse API
+	jobJSON, err := h.parseJobFileWithNomadAPI(string(jobFileContent), tagID)
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to parse job file using Nomad API")
+		http.Error(w, fmt.Sprintf("Failed to parse job file: %v", err), http.StatusBadRequest)
+		return
 	}
 
-	// Convert HCL to JSON (try nomad first, fallback to direct submission)
-	var jobJSON map[string]interface{}
-	convertCmd := exec.Command("nomad", "job", "inspect", "-json", tmpFile)
-	jsonOutput, err := convertCmd.Output()
-	if err != nil {
-		h.logger.WithError(err).Warn("Failed to convert job file to JSON using nomad - will try direct HCL parsing")
-		// Fallback: read the HCL file directly and create a basic job structure
-		// This is a simplified approach - in production you might want to use a proper HCL parser
-		jobJSON = map[string]interface{}{
-			"Job": map[string]interface{}{
-				"Name": fmt.Sprintf("job-%s", tagID),
-				"Type": "service",
-				// Add basic job structure here
-			},
-		}
-	} else {
-		// Parse JSON output from nomad inspect
-		if err := json.Unmarshal(jsonOutput, &jobJSON); err != nil {
-			h.logger.WithError(err).Error("Failed to parse converted JSON")
-			http.Error(w, "Failed to parse converted JSON", http.StatusInternalServerError)
-			return
-		}
-		h.logger.Info("Job file converted to JSON successfully")
-	}
+	fmt.Println("Parsed job JSON:", jobJSON)
 
 	// Store initial deployment record (without service name for job deployments)
 	if err := database.InsertDeployment(h.db, tagID, "", "", "pending"); err != nil {
@@ -330,4 +306,70 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// parseJobFileWithNomadAPI converts HCL job content to JSON using Nomad's parse API
+func (h *Handler) parseJobFileWithNomadAPI(jobHCL, tagID string) (map[string]interface{}, error) {
+	h.logger.WithField("tag_id", tagID).Info("Parsing job file using Nomad API")
+
+	// Prepare the request payload
+	parseRequest := map[string]interface{}{
+		"JobHCL":       jobHCL,
+		"Variables":    "",
+		"Canonicalize": true,
+	}
+
+	// Convert to JSON
+	payloadBytes, err := json.Marshal(parseRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal parse request: %v", err)
+	}
+
+	// Create request to Nomad parse API
+	url := fmt.Sprintf("%s/v1/jobs/parse?namespace=*", h.config.NomadURL)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create parse request: %v", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	req.Header.Set("Accept", "*/*")
+	if h.config.NomadToken != "" {
+		req.Header.Set("X-Nomad-Token", h.config.NomadToken)
+	}
+
+	// Create HTTP client with TLS configuration
+	client := h.nomad.GetHTTPClient()
+
+	// Make the request
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call Nomad parse API: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyStr := string(bodyBytes)
+		h.logger.WithFields(logrus.Fields{
+			"status_code": resp.StatusCode,
+			"error_body":  bodyStr,
+		}).Error("Nomad parse API returned non-200 status")
+		return nil, fmt.Errorf("nomad parse API returned status %d: %s", resp.StatusCode, bodyStr)
+	}
+
+	// Parse the response
+	var jobSpec map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&jobSpec); err != nil {
+		return nil, fmt.Errorf("failed to decode Nomad parse response: %v", err)
+	}
+
+	h.logger.WithField("tag_id", tagID).Info("Job file parsed successfully using Nomad API")
+
+	// Wrap in the expected format for job submission
+	return map[string]interface{}{
+		"Job": jobSpec,
+	}, nil
 }

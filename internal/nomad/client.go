@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -47,6 +48,11 @@ func NewClient(url string, skipTLSVerify bool, token string) *Client {
 // GetLogger returns the client's logger instance
 func (c *Client) GetLogger() *logrus.Entry {
 	return c.logger
+}
+
+// GetHTTPClient returns the client's HTTP client instance
+func (c *Client) GetHTTPClient() *http.Client {
+	return c.client
 }
 
 func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
@@ -155,8 +161,22 @@ func (c *Client) TriggerDeployment(serviceName, tagID string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		c.logger.Error("Nomad returned non-200 status for job submission")
-		return "", fmt.Errorf("nomad returned status: %d", resp.StatusCode)
+		// Read the response body to get the actual error message
+		bodyBytes, err := io.ReadAll(resp.Body)
+		var bodyStr string
+		if err != nil {
+			bodyStr = "failed to read response body"
+		} else {
+			bodyStr = string(bodyBytes)
+		}
+
+		c.logger.WithFields(logrus.Fields{
+			"service_name": serviceName,
+			"tag_id":       tagID,
+			"status_code":  resp.StatusCode,
+			"error_body":   bodyStr,
+		}).Error("Nomad returned non-200 status for job submission")
+		return "", fmt.Errorf("nomad returned status: %d with message: %s", resp.StatusCode, bodyStr)
 	}
 
 	var nomadResp models.NomadJobResponse
@@ -222,12 +242,22 @@ func (c *Client) GetJobStatus(evalID string) (string, error) {
 	}).Debug("Received response from Nomad status check")
 
 	if resp.StatusCode != http.StatusOK {
+		// Read the response body to get the actual error message
+		bodyBytes, err := io.ReadAll(resp.Body)
+		var bodyStr string
+		if err != nil {
+			bodyStr = "failed to read response body"
+		} else {
+			bodyStr = string(bodyBytes)
+		}
+
 		c.logger.WithFields(logrus.Fields{
 			"eval_id":     evalID,
 			"status_code": resp.StatusCode,
 			"status_url":  url,
+			"error_body":  bodyStr,
 		}).Error("Nomad returned non-200 status for evaluation status")
-		return "", fmt.Errorf("nomad returned status: %d", resp.StatusCode)
+		return "", fmt.Errorf("nomad returned status: %d with message: %s", resp.StatusCode, bodyStr)
 	}
 
 	var evalResp models.NomadEvalResponse
@@ -296,7 +326,7 @@ func (c *Client) SubmitJobFile(jobJSON map[string]interface{}, tagID string) (st
 	// Make HTTP request to Nomad
 	url := fmt.Sprintf("%s/v1/jobs", c.URL)
 
-	c.logger.Info("Submitting job file to Nomad")
+	c.logger.Info("Submitting job file to Nomad to url - ", url)
 
 	// Create POST request with token header
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
@@ -325,11 +355,21 @@ func (c *Client) SubmitJobFile(jobJSON map[string]interface{}, tagID string) (st
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		// Read the response body to get the actual error message
+		bodyBytes, err := io.ReadAll(resp.Body)
+		var bodyStr string
+		if err != nil {
+			bodyStr = "failed to read response body"
+		} else {
+			bodyStr = string(bodyBytes)
+		}
+
 		c.logger.WithFields(logrus.Fields{
 			"tag_id":      tagID,
 			"status_code": resp.StatusCode,
+			"error_body":  bodyStr,
 		}).Error("Nomad returned non-200 status for job file submission")
-		return "", fmt.Errorf("nomad returned status: %d", resp.StatusCode)
+		return "", fmt.Errorf("nomad returned status: %d with message: %s", resp.StatusCode, bodyStr)
 	}
 
 	var nomadResp models.NomadJobResponse
