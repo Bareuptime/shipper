@@ -7,15 +7,15 @@ import (
 )
 
 type Config struct {
-	NomadURL         string
-	ValidSecret      string
-	Port             string
-	ValidServices    []string
-	SkipTLSVerify    bool
-	NomadToken       string
-	NewRelicLicense  string
-	NewRelicAppName  string
-	NewRelicEnabled  bool
+	NomadURL        string
+	ValidSecret     string
+	Port            string
+	ValidServices   []string
+	SkipTLSVerify   bool
+	NomadToken      string
+	NewRelicLicense string
+	NewRelicAppName string
+	NewRelicEnabled bool
 }
 
 func Load() *Config {
@@ -42,15 +42,15 @@ func Load() *Config {
 	}
 
 	return &Config{
-		NomadURL:         getEnv("NOMAD_URL", "https://10.10.85.1:4646"),
-		ValidSecret:      getEnv("RPC_SECRET", "your-64-character-secret-key-here-please-change-this-in-production"),
-		Port:             getEnv("PORT", "16166"),
-		ValidServices:    validServices,
-		SkipTLSVerify:    skipTLSVerify,
-		NomadToken:       getEnv("NOMAD_TOKEN", "e26c5903-27f8-4c10-7d91-1d5b5b022c89"),
-		NewRelicLicense:  getEnv("NEW_RELIC_LICENSE_KEY", ""),
-		NewRelicAppName:  getEnv("NEW_RELIC_APP_NAME", "shipper-deployment"),
-		NewRelicEnabled:  newRelicEnabled,
+		NomadURL:        getEnv("NOMAD_URL", "https://10.10.85.1:4646"),
+		ValidSecret:     getEnv("RPC_SECRET", "your-64-character-secret-key-here-please-change-this-in-production"),
+		Port:            getEnv("PORT", "16166"),
+		ValidServices:   validServices,
+		SkipTLSVerify:   skipTLSVerify,
+		NomadToken:      getEnv("NOMAD_TOKEN", "e26c5903-27f8-4c10-7d91-1d5b5b022c89"),
+		NewRelicLicense: getEnv("NEW_RELIC_LICENSE_KEY", ""),
+		NewRelicAppName: getEnv("NEW_RELIC_APP_NAME", "shipper-deployment"),
+		NewRelicEnabled: newRelicEnabled,
 	}
 }
 
