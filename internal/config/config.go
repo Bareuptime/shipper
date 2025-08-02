@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"strconv"
-	"strings"
 )
 
 type Config struct {
@@ -19,16 +18,6 @@ type Config struct {
 }
 
 func Load() *Config {
-	validServicesStr := getEnv("VALID_SERVICES", "")
-	var validServices []string
-	if validServicesStr != "" {
-		validServices = strings.Split(validServicesStr, ",")
-		// Trim whitespace from each service name
-		for i, service := range validServices {
-			validServices[i] = strings.TrimSpace(service)
-		}
-	}
-
 	skipTLSVerifyStr := getEnv("SKIP_TLS_VERIFY", "true")
 	skipTLSVerify, err := strconv.ParseBool(skipTLSVerifyStr)
 	if err != nil {

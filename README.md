@@ -60,7 +60,6 @@ cp .env.example .env
 | `NOMAD_TOKEN` | Nomad API token | - | ✅ |
 | `RPC_SECRET` | Secret key for API authentication (64 chars) | - | ✅ |
 | `PORT` | Server port | `16166` | ❌ |
-| `VALID_SERVICES` | Comma-separated list of allowed services | (all allowed) | ❌ |
 | `SKIP_TLS_VERIFY` | Skip TLS verification for Nomad API | `false` | ❌ |
 | `LOG_LEVEL` | Logging level (debug, info, warn, error) | `info` | ❌ |
 | `LOG_FORMAT` | Log format (json, text) | `json` | ❌ |
@@ -163,7 +162,6 @@ make docker-stop     # Stop Docker Compose
 ## 🔒 Security Considerations
 
 - **Change Default Secrets**: Always use a secure 64-character secret key in production
-- **Service Whitelist**: Use `VALID_SERVICES` to restrict which services can be deployed
 - **TLS Verification**: Keep `SKIP_TLS_VERIFY=false` in production environments
 - **Network Security**: Ensure proper network policies for Nomad cluster access
 - **Environment Variables**: Never commit `.env` files with real credentials
@@ -204,6 +202,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
    - Verify the secret key matches in deployment requests
 
 3. **Service deployment fails**
-   - Check if service name is in `VALID_SERVICES` (if configured)
    - Verify Nomad token has sufficient permissions
    - Check Nomad cluster status and resources
