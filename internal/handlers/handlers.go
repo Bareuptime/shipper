@@ -205,14 +205,6 @@ func (h *Handler) Deploy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logger.WithField("request", req).Info("Deployment request received")
-
-	// Validate service name
-	if !h.config.IsValidService(req.ServiceName) {
-		h.logger.WithField("service_name", req.ServiceName).Error("Invalid service name")
-		http.Error(w, "Invalid service name", http.StatusBadRequest)
-		return
-	}
-
 	// Check if tagID is empty or doesn't exist
 	tagID := req.TagID
 	if tagID == "" {
