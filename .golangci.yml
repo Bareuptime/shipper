@@ -1,0 +1,41 @@
+# golangci-lint configuration
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters-settings:
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment
+  
+  gocyclo:
+    min-complexity: 15
+  
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+  
+  misspell:
+    locale: US
+  
+  lll:
+    line-length: 120
+
+linters:
+  enable:
+    - bodyclose
+    - errcheck
+    - goconst
+    - gocyclo
+    - gofmt
+    - goimports
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - typecheck
+    - unused
+    - whitespace

@@ -34,7 +34,7 @@ func Load() *Config {
 		ValidSecret:     getEnv("RPC_SECRET", "your-64-character-secret-key-here-please-change-this-in-production"),
 		Port:            getEnv("PORT", "16166"),
 		SkipTLSVerify:   skipTLSVerify,
-		NomadToken:      getEnv("NOMAD_TOKEN", "e26c5903-27f8-4c10-7d91-1d5b5b022c89"),
+		NomadToken:      getEnv("NOMAD_TOKEN", ""),
 		NewRelicLicense: getEnv("NEW_RELIC_LICENSE_KEY", ""),
 		NewRelicAppName: getEnv("NEW_RELIC_APP_NAME", "shipper-deployment"),
 		NewRelicEnabled: newRelicEnabled,

@@ -1,8 +1,12 @@
 # Shipper Deployment Service
 
+[![Test Suite](https://github.com/Bareuptime/bastion/actions/workflows/test.yml/badge.svg)](https://github.com/Bareuptime/bastion/actions/workflows/test.yml)
+[![Build Matrix](https://github.com/Bareuptime/bastion/actions/workflows/build-matrix.yml/badge.svg)](https://github.com/Bareuptime/bastion/actions/workflows/build-matrix.yml)
+[![Docker Build](https://github.com/Bareuptime/bastion/actions/workflows/docker.yml/badge.svg)](https://github.com/Bareuptime/bastion/actions/workflows/docker.yml)
+
 A lightweight Go service that acts as a secure deployment gateway for [HashiCorp Nomad](https://www.nomadproject.io/) clusters. This service provides a simple REST API for triggering and monitoring service deployments through Nomad.
 
-## 🚀 Features
+## Features
 
 - **Secure Authentication**: API key-based authentication for deployment requests
 - **Deployment Tracking**: SQLite database for tracking deployment status and history
@@ -45,7 +49,7 @@ Content-Type: multipart/form-data
 X-Secret-Key: your-64-character-secret-key
 
 Form data:
-- tag_id: deployment-tag-123
+- tag_id: sha-id-123
 - job_file: (Nomad job file upload, max 1MB)
 ```
 
@@ -139,6 +143,35 @@ This starts the service with Docker Compose and automatically reloads on code ch
 
 ## 🛠️ Development
 
+### Running Tests
+
+The project includes comprehensive tests covering models, configuration, database operations, handlers, and integration scenarios:
+
+```bash
+make test
+```
+
+Tests are located in the `test/` directory and include:
+
+- **Unit tests**: Config, models, database operations
+- **Handler tests**: API endpoint functionality with mocked dependencies
+- **Integration tests**: Full HTTP server testing with authentication
+
+### CI/CD Pipeline
+
+The project includes comprehensive GitHub Actions workflows:
+
+- **Test Suite** (`test.yml`): Runs tests, checks coverage, formatting, and security
+- **Build Matrix** (`build-matrix.yml`): Tests compatibility across Go versions and OS platforms
+- **Docker Build** (`docker.yml`): Builds and publishes Docker images
+
+All workflows run on:
+
+- Every push to `main`/`master` branches
+- Every pull request
+- Support for Go 1.22, 1.23, and 1.24
+- Cross-platform testing (Linux, macOS, Windows)
+
 ### Available Make Commands
 
 ```bash
@@ -158,6 +191,8 @@ make docker-stop     # Stop Docker Compose
 
 ```text
 .
+├── .github/
+│   └── workflows/      # CI/CD workflows
 ├── cmd/
 │   └── shipper/        # Application entry point
 ├── internal/
@@ -169,7 +204,9 @@ make docker-stop     # Stop Docker Compose
 │   ├── newrelic/       # New Relic integration
 │   ├── nomad/          # Nomad client
 │   └── server/         # HTTP server setup
+├── test/               # Comprehensive test suite
 ├── .env.example        # Environment variables template
+├── .golangci.yml       # Linting configuration
 ├── docker-compose.yml  # Production Docker Compose
 ├── docker-compose.dev.yml # Development Docker Compose
 └── Makefile           # Build automation

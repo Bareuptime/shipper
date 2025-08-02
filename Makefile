@@ -14,7 +14,7 @@ dev:
 
 # Run tests
 test:
-	go test ./...
+	go test ./test -v
 
 # Clean build artifacts
 clean:
