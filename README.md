@@ -27,19 +27,35 @@ Returns the service health status.
 ```http
 POST /deploy
 Content-Type: application/json
+X-Secret-Key: your-64-character-secret-key
 
 {
   "service_name": "my-service",
-  "secret_key": "your-64-character-secret-key"
+  "tag_id": "sha-id"
 }
 ```
 
 Triggers a deployment for the specified service.
 
+### Deploy with Job File
+
+```http
+POST /deploy/job
+Content-Type: multipart/form-data
+X-Secret-Key: your-64-character-secret-key
+
+Form data:
+- tag_id: deployment-tag-123
+- job_file: (Nomad job file upload, max 1MB)
+```
+
+Uploads and deploys a custom Nomad job file.
+
 ### Check Deployment Status
 
 ```http
 GET /status/{tag_id}
+X-Secret-Key: your-64-character-secret-key
 ```
 
 Returns the status of a specific deployment by its tag ID.
