@@ -421,12 +421,12 @@ func TestStatusHandlerHTTP(t *testing.T) {
 
 func TestNewHandlerAndHelpers(t *testing.T) {
 	handler, _ := setupTestHandler(t)
-	
+
 	t.Run("NewHandler creates handler with dependencies", func(t *testing.T) {
 		if handler == nil {
 			t.Error("Expected handler to not be nil")
 		}
-		
+
 		// Test that the handler has the required dependencies by calling Health
 		req, err := http.NewRequest("GET", "/health", nil)
 		if err != nil {
@@ -440,13 +440,13 @@ func TestNewHandlerAndHelpers(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Errorf("Expected status 200, got %d", rr.Code)
 		}
-		
+
 		// Verify the response contains expected JSON
 		var response map[string]string
 		if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
 			t.Fatalf("Failed to unmarshal response: %v", err)
 		}
-		
+
 		if response["status"] != "healthy" {
 			t.Errorf("Expected status 'healthy', got %v", response["status"])
 		}
@@ -459,19 +459,19 @@ func TestNomadClientHelpers(t *testing.T) {
 		SkipTLSVerify: true,
 		NomadToken:    "test-token",
 	}
-	
+
 	t.Run("NewClient creates client with proper configuration", func(t *testing.T) {
 		client := nomad.NewClient(cfg.NomadURL, cfg.SkipTLSVerify, cfg.NomadToken)
 		if client == nil {
 			t.Error("Expected client to not be nil")
 		}
-		
+
 		// Test GetLogger function
 		logger := client.GetLogger()
 		if logger == nil {
 			t.Error("Expected logger to not be nil")
 		}
-		
+
 		// Test GetHTTPClient function
 		httpClient := client.GetHTTPClient()
 		if httpClient == nil {
