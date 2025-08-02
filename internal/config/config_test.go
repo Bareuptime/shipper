@@ -12,7 +12,7 @@ func TestLoad(t *testing.T) {
 		"NOMAD_URL", "RPC_SECRET", "PORT", "SKIP_TLS_VERIFY",
 		"NOMAD_TOKEN", "NEW_RELIC_LICENSE_KEY", "NEW_RELIC_APP_NAME", "NEW_RELIC_ENABLED",
 	}
-	
+
 	for _, key := range envVars {
 		originalEnv[key] = os.Getenv(key)
 	}
@@ -38,14 +38,14 @@ func TestLoad(t *testing.T) {
 			name: "default values",
 			envVars: map[string]string{
 				// Clear all env vars
-				"NOMAD_URL":               "",
-				"RPC_SECRET":              "",
-				"PORT":                    "",
-				"SKIP_TLS_VERIFY":         "",
-				"NOMAD_TOKEN":             "",
-				"NEW_RELIC_LICENSE_KEY":   "",
-				"NEW_RELIC_APP_NAME":      "",
-				"NEW_RELIC_ENABLED":       "",
+				"NOMAD_URL":             "",
+				"RPC_SECRET":            "",
+				"PORT":                  "",
+				"SKIP_TLS_VERIFY":       "",
+				"NOMAD_TOKEN":           "",
+				"NEW_RELIC_LICENSE_KEY": "",
+				"NEW_RELIC_APP_NAME":    "",
+				"NEW_RELIC_ENABLED":     "",
 			},
 			expected: &Config{
 				NomadURL:        "https://10.10.85.1:4646",
@@ -61,14 +61,14 @@ func TestLoad(t *testing.T) {
 		{
 			name: "custom values",
 			envVars: map[string]string{
-				"NOMAD_URL":               "https://custom-nomad:4646",
-				"RPC_SECRET":              "custom-secret-key-64-chars-long-production-ready-secret",
-				"PORT":                    "8080",
-				"SKIP_TLS_VERIFY":         "false",
-				"NOMAD_TOKEN":             "custom-token-123",
-				"NEW_RELIC_LICENSE_KEY":   "custom-license",
-				"NEW_RELIC_APP_NAME":      "custom-app",
-				"NEW_RELIC_ENABLED":       "true",
+				"NOMAD_URL":             "https://custom-nomad:4646",
+				"RPC_SECRET":            "custom-secret-key-64-chars-long-production-ready-secret",
+				"PORT":                  "8080",
+				"SKIP_TLS_VERIFY":       "false",
+				"NOMAD_TOKEN":           "custom-token-123",
+				"NEW_RELIC_LICENSE_KEY": "custom-license",
+				"NEW_RELIC_APP_NAME":    "custom-app",
+				"NEW_RELIC_ENABLED":     "true",
 			},
 			expected: &Config{
 				NomadURL:        "https://custom-nomad:4646",

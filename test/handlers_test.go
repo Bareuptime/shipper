@@ -23,7 +23,7 @@ import (
 func setupTestHandler(t *testing.T) (*handlers.Handler, *sql.DB) {
 	// Create test database
 	tmpFile := "/tmp/test_handler_" + t.Name() + "_" + time.Now().Format("20060102150405") + ".db"
-	
+
 	t.Cleanup(func() {
 		os.Remove(tmpFile)
 	})

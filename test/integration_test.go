@@ -22,7 +22,7 @@ import (
 func setupTestRouter(t *testing.T) (*mux.Router, *sql.DB) {
 	// Create test database
 	tmpFile := "/tmp/test_router_" + t.Name() + "_" + time.Now().Format("20060102150405") + ".db"
-	
+
 	t.Cleanup(func() {
 		os.Remove(tmpFile)
 	})
@@ -263,7 +263,7 @@ func TestAuthMiddleware(t *testing.T) {
 			defer resp.Body.Close()
 
 			if resp.StatusCode != http.StatusUnauthorized {
-				t.Errorf("Expected status %d for %s %s, got %d", 
+				t.Errorf("Expected status %d for %s %s, got %d",
 					http.StatusUnauthorized, endpoint.method, endpoint.path, resp.StatusCode)
 			}
 		})

@@ -14,7 +14,7 @@ import (
 func setupTestDB(t *testing.T) *sql.DB {
 	// Create a temporary database file
 	tmpFile := "/tmp/test_" + t.Name() + "_" + time.Now().Format("20060102150405") + ".db"
-	
+
 	// Ensure cleanup
 	t.Cleanup(func() {
 		os.Remove(tmpFile)
