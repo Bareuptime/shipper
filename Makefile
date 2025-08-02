@@ -32,10 +32,6 @@ tidy:
 docker-build:
 	docker build -t shipper-deployment .
 
-# Run with Docker Compose
-docker-run:
-	docker-compose up -d
-
 # Stop Docker Compose
 docker-stop:
 	docker-compose down

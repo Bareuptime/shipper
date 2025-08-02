@@ -64,6 +64,15 @@ X-Secret-Key: your-64-character-secret-key
 
 Returns the status of a specific deployment by its tag ID.
 
+## 📚 Documentation
+
+Comprehensive documentation and examples are available in the [docs/](docs/) directory:
+
+- **[Nomad Deployment Guide](docs/nomad-deployment.md)** - How to deploy Shipper itself in Nomad clusters
+- **[API Usage Examples](docs/api-usage.md)** - Practical API usage examples and integration patterns  
+- **[Example Job Files](docs/examples/)** - Sample Nomad job files for various application types
+- **[Production Templates](docs/nomad-jobs/)** - Production-ready Nomad job templates for Shipper
+
 ## ⚙️ Configuration
 
 The service is configured through environment variables. Copy `.env.example` to `.env` and modify as needed:
@@ -141,6 +150,35 @@ This starts the service with Docker Compose and automatically reloads on code ch
    make docker-run
    ```
 
+### 🎯 Nomad Deployment
+
+For deploying the Shipper service itself in a Nomad cluster:
+
+1. **Basic Nomad Deployment**
+
+   ```bash
+   # Use the provided Nomad job file
+   nomad job run docs/nomad-jobs/shipper-basic.nomad
+   ```
+
+2. **Production Nomad Deployment**
+
+   ```bash
+   # For production with high availability
+   nomad job run docs/nomad-jobs/shipper-production.nomad
+   ```
+
+3. **Configure Nomad Variables**
+
+   ```bash
+   # Set up secrets using Nomad variables
+   nomad var put nomad/jobs/shipper-deployment \
+     nomad_token="your-nomad-token" \
+     rpc_secret="your-64-character-secret"
+   ```
+
+**📚 For detailed Nomad deployment instructions, see [docs/nomad-deployment.md](docs/nomad-deployment.md)**
+
 ## 🛠️ Development
 
 ### Running Tests
@@ -195,6 +233,13 @@ make docker-stop     # Stop Docker Compose
 │   └── workflows/      # CI/CD workflows
 ├── cmd/
 │   └── shipper/        # Application entry point
+├── docs/               # Comprehensive documentation
+│   ├── examples/       # Sample Nomad job files
+│   ├── nomad-jobs/     # Shipper deployment templates
+│   ├── api-usage.md    # API documentation and examples
+│   ├── integration-patterns.md # CI/CD integration patterns
+│   ├── nomad-deployment.md # Nomad deployment guide
+│   └── README.md       # Documentation index
 ├── internal/
 │   ├── config/         # Configuration management
 │   ├── database/       # Database operations

@@ -2,13 +2,32 @@ version: '3.8'
 
 services:
   shipper-deployment:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "16166:16166"
     environment:
-      - NOMAD_URL=https://10.10.85.1:4646
-      - RPC_SECRET=your-64-character-secret-key-here-please-change-this-in-production
+      - NOMAD_URL=${NOMAD_URL}
+      - NOMAD_TOKEN=${NOMAD_TOKEN}
+      - RPC_SECRET=${RPC_SECRET}
       - PORT=16166
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - SKIP_TLS_VERIFY=${SKIP_TLS_VERIFY:-false}
+      - NEW_RELIC_ENABLED=${NEW_RELIC_ENABLED:-false}
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
+      - NEW_RELIC_APP_NAME=${NEW_RELIC_APP_NAME:-shipper-deployment}
     volumes:
-      - ./data:/root/data
+      - shipper_data:/root/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:16166/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  shipper_data:
+    driver: local
