@@ -26,6 +26,9 @@ go.work
 tmp/
 build-errors.log
 
+# Data directories
+data/
+
 # IDE files
 .vscode/
 .idea/

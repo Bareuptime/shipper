@@ -8,8 +8,8 @@ services:
     ports:
       - "16166:16166"
     environment:
-      - NOMAD_URL=https://10.10.85.1:4646
-      - RPC_SECRET=dev-secret-key-change-this-in-production-64-characters-long
+      - NOMAD_URL=https://your-nomad-cluster:4646
+      - RPC_SECRET=your-64-character-secret-key-here-please-change-this-in-production
       - PORT=16166
       - LOG_LEVEL=debug
       - LOG_FORMAT=text
