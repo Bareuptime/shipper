@@ -1,8 +1,6 @@
 package logger
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path"
@@ -74,44 +72,9 @@ func Get() *logrus.Logger {
 	return globalLogger
 }
 
-// GenerateRequestID creates a unique ID for request tracking
-func GenerateRequestID() string {
-	bytes := make([]byte, 8)
-	if _, err := rand.Read(bytes); err != nil {
-		return "req-error-generating"
-	}
-	return "req-" + hex.EncodeToString(bytes)
-}
-
-// WithRequestID creates a new entry with a request ID
-func WithRequestID() *logrus.Entry {
-	return Get().WithField("request_id", GenerateRequestID())
-}
-
-// WithContext creates a new entry with context ID
-func WithContext(contextID string) *logrus.Entry {
-	return Get().WithField("context_id", contextID)
-}
-
 // WithModule creates a new entry with module name
 func WithModule(moduleName string) *logrus.Entry {
 	return Get().WithField("module", moduleName)
-}
-
-// WithRequestIDAndModule creates a new entry with both request ID and module name
-func WithRequestIDAndModule(moduleName string) *logrus.Entry {
-	return Get().WithFields(logrus.Fields{
-		"request_id": GenerateRequestID(),
-		"module":     moduleName,
-	})
-}
-
-// WithContextAndModule creates a new entry with both context ID and module name
-func WithContextAndModule(contextID, moduleName string) *logrus.Entry {
-	return Get().WithFields(logrus.Fields{
-		"context_id": contextID,
-		"module":     moduleName,
-	})
 }
 
 // Helper function for formatting caller information

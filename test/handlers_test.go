@@ -17,6 +17,7 @@ import (
 	"shipper-deployment/internal/models"
 	"shipper-deployment/internal/nomad"
 
+	"github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -346,6 +347,135 @@ func TestStatusHandler(t *testing.T) {
 		err := db.QueryRow(query, "non-existent").Scan(&retrievedStatus)
 		if err == nil {
 			t.Error("Expected error for non-existent deployment, but got none")
+		}
+	})
+}
+
+func TestStatusHandlerHTTP(t *testing.T) {
+	handler, db := setupTestHandler(t)
+
+	t.Run("status endpoint returns deployment info", func(t *testing.T) {
+		// Insert a test deployment
+		tagID := "status-http-test-123"
+		serviceName := "test-service"
+		jobID := "job-456"
+		status := "running"
+
+		insertQuery := "INSERT INTO deployments (tag_id, service_name, job_id, status) VALUES (?, ?, ?, ?)"
+		_, err := db.Exec(insertQuery, tagID, serviceName, jobID, status)
+		if err != nil {
+			t.Fatalf("Failed to insert test deployment: %v", err)
+		}
+
+		// Create request
+		req, err := http.NewRequest("GET", "/status/"+tagID, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Add URL parameters using mux
+		rr := httptest.NewRecorder()
+		router := mux.NewRouter()
+		router.HandleFunc("/status/{tag_id}", handler.Status).Methods("GET")
+		router.ServeHTTP(rr, req)
+
+		// Check response
+		if status := rr.Code; status != http.StatusOK {
+			t.Errorf("Status handler returned wrong status code: got %v want %v", status, http.StatusOK)
+		}
+
+		var response models.StatusResponse
+		if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		if response.TagID != tagID {
+			t.Errorf("Expected TagID %s, got %s", tagID, response.TagID)
+		}
+
+		if response.Status != "running" {
+			t.Errorf("Expected status 'running', got %s", response.Status)
+		}
+
+		if response.JobID != jobID {
+			t.Errorf("Expected JobID %s, got %s", jobID, response.JobID)
+		}
+	})
+
+	t.Run("status endpoint returns 404 for non-existent deployment", func(t *testing.T) {
+		req, err := http.NewRequest("GET", "/status/non-existent-tag", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rr := httptest.NewRecorder()
+		router := mux.NewRouter()
+		router.HandleFunc("/status/{tag_id}", handler.Status).Methods("GET")
+		router.ServeHTTP(rr, req)
+
+		if status := rr.Code; status != http.StatusNotFound {
+			t.Errorf("Expected status 404, got %d", status)
+		}
+	})
+}
+
+func TestNewHandlerAndHelpers(t *testing.T) {
+	handler, _ := setupTestHandler(t)
+	
+	t.Run("NewHandler creates handler with dependencies", func(t *testing.T) {
+		if handler == nil {
+			t.Error("Expected handler to not be nil")
+		}
+		
+		// Test that the handler has the required dependencies by calling Health
+		req, err := http.NewRequest("GET", "/health", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rr := httptest.NewRecorder()
+		handler.Health(rr, req)
+
+		// This should exercise writeJSONResponse internally
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
+		}
+		
+		// Verify the response contains expected JSON
+		var response map[string]string
+		if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+		
+		if response["status"] != "healthy" {
+			t.Errorf("Expected status 'healthy', got %v", response["status"])
+		}
+	})
+}
+
+func TestNomadClientHelpers(t *testing.T) {
+	cfg := &config.Config{
+		NomadURL:      "http://test-nomad:4646",
+		SkipTLSVerify: true,
+		NomadToken:    "test-token",
+	}
+	
+	t.Run("NewClient creates client with proper configuration", func(t *testing.T) {
+		client := nomad.NewClient(cfg.NomadURL, cfg.SkipTLSVerify, cfg.NomadToken)
+		if client == nil {
+			t.Error("Expected client to not be nil")
+		}
+		
+		// Test GetLogger function
+		logger := client.GetLogger()
+		if logger == nil {
+			t.Error("Expected logger to not be nil")
+		}
+		
+		// Test GetHTTPClient function
+		httpClient := client.GetHTTPClient()
+		if httpClient == nil {
+			t.Error("Expected HTTP client to not be nil")
 		}
 	})
 }

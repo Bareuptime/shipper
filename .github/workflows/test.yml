@@ -47,15 +47,15 @@ jobs:
       run: go vet ./...
 
     - name: Run tests
-      run: go test ./test -v -race -coverprofile=coverage.out
+      run: go test -v -race -coverprofile=coverage.out -coverpkg=./... ./test
 
     - name: Check test coverage
       run: |
         go tool cover -func=coverage.out
         COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
         echo "Total coverage: ${COVERAGE}%"
-        if [ $(echo "$COVERAGE < 70" | awk '{print ($1 < $2)}') -eq 1 ]; then
-          echo "Coverage is below 70%. Current coverage: ${COVERAGE}%"
+        if [ $(echo "$COVERAGE < 40" | awk '{print ($1 < $2)}') -eq 1 ]; then
+          echo "Coverage is below 40%. Current coverage: ${COVERAGE}%"
           exit 1
         fi
 

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"shipper-deployment/internal/config"
+	"shipper-deployment/internal/logger"
 )
 
 func TestConfigLoad(t *testing.T) {
@@ -122,4 +123,18 @@ func TestConfigLoad(t *testing.T) {
 			t.Errorf("NewRelicEnabled = %v, want %v", cfg.NewRelicEnabled, false)
 		}
 	})
+}
+
+func TestLoggerFunctions(t *testing.T) {
+	// Test Get function
+	loggerInstance := logger.Get()
+	if loggerInstance == nil {
+		t.Error("Expected logger to not be nil")
+	}
+
+	// Test WithModule function
+	loggerWithModule := logger.WithModule("test-module")
+	if loggerWithModule == nil {
+		t.Error("Expected logger with module to not be nil")
+	}
 }
