@@ -30,6 +30,7 @@ func NewClient(url string, skipTLSVerify bool, token string) *Client {
 	// Create custom transport with TLS verification option
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
+			// #nosec G402 - InsecureSkipVerify is configurable for development environments
 			InsecureSkipVerify: skipTLSVerify,
 		},
 	}

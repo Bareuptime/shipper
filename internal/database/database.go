@@ -16,7 +16,7 @@ func InitDB() *sql.DB {
 
 	// Create directory if it doesn't exist
 	dbDir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dbDir, 0755); err != nil {
+	if err := os.MkdirAll(dbDir, 0750); err != nil {
 		log.Fatal("Failed to create database directory:", err)
 	}
 	log.Printf("Database directory ensured at: %s", dbDir)

@@ -197,7 +197,9 @@ func TestDeployJobHandler(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		tagField.Write([]byte("test-job-123"))
+		if _, err := tagField.Write([]byte("test-job-123")); err != nil {
+			t.Fatal(err)
+		}
 
 		// Add job file
 		jobFile, err := writer.CreateFormFile("job_file", "test.hcl")
@@ -208,18 +210,18 @@ func TestDeployJobHandler(t *testing.T) {
 job "test-job" {
   datacenters = ["dc1"]
   type = "service"
-  
+
   group "web" {
     count = 1
-    
+
     task "server" {
       driver = "docker"
-      
+
       config {
         image = "nginx:latest"
         ports = ["http"]
       }
-      
+
       resources {
         cpu    = 100
         memory = 64
@@ -228,7 +230,9 @@ job "test-job" {
   }
 }
 `
-		jobFile.Write([]byte(jobContent))
+		if _, err := jobFile.Write([]byte(jobContent)); err != nil {
+			t.Fatal(err)
+		}
 		writer.Close()
 
 		req, err := http.NewRequest("POST", "/deploy/job", &buf)
@@ -256,7 +260,9 @@ job "test-job" {
 		if err != nil {
 			t.Fatal(err)
 		}
-		jobFile.Write([]byte("job content"))
+		if _, err := jobFile.Write([]byte("job content")); err != nil {
+			t.Fatal(err)
+		}
 		writer.Close()
 
 		req, err := http.NewRequest("POST", "/deploy/job", &buf)
@@ -286,7 +292,9 @@ job "test-job" {
 		if err != nil {
 			t.Fatal(err)
 		}
-		tagField.Write([]byte("test-123"))
+		if _, err := tagField.Write([]byte("test-123")); err != nil {
+			t.Fatal(err)
+		}
 		writer.Close()
 
 		req, err := http.NewRequest("POST", "/deploy/job", &buf)

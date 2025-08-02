@@ -36,9 +36,17 @@ func NewHandler(db *sql.DB, cfg *config.Config, nomadClient *nomad.Client) *Hand
 	}
 }
 
-func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
+// writeJSONResponse is a helper function to write JSON responses with error handling
+func (h *Handler) writeJSONResponse(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "healthy", "time": time.Now().Format(time.RFC3339)})
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		h.logger.WithError(err).Error("Failed to encode JSON response")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
+	h.writeJSONResponse(w, map[string]string{"status": "healthy", "time": time.Now().Format(time.RFC3339)})
 }
 
 func (h *Handler) DeployJob(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +144,7 @@ func (h *Handler) DeployJob(w http.ResponseWriter, r *http.Request) {
 
 	// Create temporary file in /tmp location
 	tmpFile := fmt.Sprintf("/tmp/nomad-job-%s.hcl", tagID)
-	if err := os.WriteFile(tmpFile, jobFileContent, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, jobFileContent, 0600); err != nil {
 		h.logger.WithError(err).Error("Failed to write job file to tmp location")
 		http.Error(w, "Failed to write job file", http.StatusInternalServerError)
 		return
@@ -166,14 +174,15 @@ func (h *Handler) DeployJob(w http.ResponseWriter, r *http.Request) {
 	jobID, err := h.nomad.SubmitJobFile(jobJSON, tagID)
 	if err != nil {
 		h.logger.WithError(err).WithField("tag_id", tagID).Error("Nomad job submission failed")
-		database.UpdateDeploymentStatus(h.db, tagID, "failed")
+		if updateErr := database.UpdateDeploymentStatus(h.db, tagID, "failed"); updateErr != nil {
+			h.logger.WithError(updateErr).Error("Failed to update deployment status")
+		}
 		response := models.DeploymentResponse{
 			Status:  "failed",
 			TagID:   tagID,
 			Message: err.Error(),
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		h.writeJSONResponse(w, response)
 		return
 	}
 
@@ -192,8 +201,7 @@ func (h *Handler) DeployJob(w http.ResponseWriter, r *http.Request) {
 		JobID:  jobID,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	h.writeJSONResponse(w, response)
 }
 
 func (h *Handler) Deploy(w http.ResponseWriter, r *http.Request) {
@@ -236,14 +244,15 @@ func (h *Handler) Deploy(w http.ResponseWriter, r *http.Request) {
 			"service": req.ServiceName,
 			"tag_id":  tagID,
 		}).Error("Nomad deployment failed")
-		database.UpdateDeploymentStatus(h.db, tagID, "failed")
+		if updateErr := database.UpdateDeploymentStatus(h.db, tagID, "failed"); updateErr != nil {
+			h.logger.WithError(updateErr).Error("Failed to update deployment status")
+		}
 		response := models.DeploymentResponse{
 			Status:  "failed",
 			TagID:   tagID,
 			Message: err.Error(),
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		h.writeJSONResponse(w, response)
 		return
 	}
 
@@ -262,8 +271,7 @@ func (h *Handler) Deploy(w http.ResponseWriter, r *http.Request) {
 		JobID:  jobID,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	h.writeJSONResponse(w, response)
 }
 
 func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
@@ -296,8 +304,7 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 		JobID:  jobID,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	h.writeJSONResponse(w, response)
 }
 
 // parseJobFileWithNomadAPI converts HCL job content to JSON using Nomad's parse API

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"time"
 
 	"shipper-deployment/internal/config"
 	"shipper-deployment/internal/handlers"
@@ -126,5 +127,15 @@ func (s *Server) newRelicMiddleware(next http.Handler) http.Handler {
 
 func (s *Server) Start() error {
 	s.logger.WithField("port", s.config.Port).Info("Server starting1")
-	return http.ListenAndServe(":"+s.config.Port, s.router)
+
+	// Create server with timeouts for security
+	srv := &http.Server{
+		Addr:         ":" + s.config.Port,
+		Handler:      s.router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	return srv.ListenAndServe()
 }
