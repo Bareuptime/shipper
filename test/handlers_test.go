@@ -1,6 +1,7 @@
 package test
 
 import (
+	"bufio"
 	"bytes"
 	"database/sql"
 	"encoding/json"
@@ -449,6 +450,454 @@ func TestNewHandlerAndHelpers(t *testing.T) {
 
 		if response["status"] != "healthy" {
 			t.Errorf("Expected status 'healthy', got %v", response["status"])
+		}
+	})
+}
+
+func setupTestHandlerWithNomadURL(t *testing.T, nomadURL string) (*handlers.Handler, *sql.DB) {
+	safeName := strings.ReplaceAll(t.Name(), "/", "_")
+	tmpFile := "/tmp/test_handler_mock_" + safeName + "_" + time.Now().Format("20060102150405") + ".db"
+
+	t.Cleanup(func() {
+		os.Remove(tmpFile)
+	})
+
+	db, err := sql.Open("sqlite3", tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open test database: %v", err)
+	}
+
+	createTable := `
+	CREATE TABLE IF NOT EXISTS deployments (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		tag_id TEXT UNIQUE NOT NULL,
+		service_name TEXT NOT NULL,
+		job_id TEXT,
+		status TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`
+
+	_, err = db.Exec(createTable)
+	if err != nil {
+		t.Fatalf("Failed to create table: %v", err)
+	}
+
+	t.Cleanup(func() {
+		db.Close()
+	})
+
+	cfg := &config.Config{
+		NomadURL:      nomadURL,
+		ValidSecret:   "test-secret-key-64-characters-long-for-testing-purposes",
+		Port:          "16166",
+		SkipTLSVerify: true,
+		NomadToken:    "test-token",
+	}
+
+	nomadClient := nomad.NewClient(cfg.NomadURL, cfg.SkipTLSVerify, cfg.NomadToken)
+	handler := handlers.NewHandler(db, cfg, nomadClient)
+
+	return handler, db
+}
+
+// parseSSEEvents reads SSE data lines from a response body
+func parseSSEEvents(body string) []models.StreamEvent {
+	var events []models.StreamEvent
+	scanner := bufio.NewScanner(strings.NewReader(body))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "data: ") {
+			data := strings.TrimPrefix(line, "data: ")
+			var event models.StreamEvent
+			if err := json.Unmarshal([]byte(data), &event); err == nil {
+				events = append(events, event)
+			}
+		}
+	}
+	return events
+}
+
+func TestStreamDeploymentStatusTerminal(t *testing.T) {
+	handler, db := setupTestHandler(t)
+
+	t.Run("completed deployment sends single event", func(t *testing.T) {
+		tagID := "stream-completed-123"
+		_, err := db.Exec("INSERT INTO deployments (tag_id, service_name, job_id, status) VALUES (?, ?, ?, ?)",
+			tagID, "test-service", "eval-123", "completed")
+		if err != nil {
+			t.Fatalf("Failed to insert deployment: %v", err)
+		}
+
+		req, err := http.NewRequest("GET", "/deploy/stream/"+tagID, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rr := httptest.NewRecorder()
+		router := mux.NewRouter()
+		router.HandleFunc("/deploy/stream/{tag_id}", handler.StreamDeploymentStatus).Methods("GET")
+		router.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
+		}
+
+		if ct := rr.Header().Get("Content-Type"); ct != "text/event-stream" {
+			t.Errorf("Expected Content-Type text/event-stream, got %s", ct)
+		}
+
+		events := parseSSEEvents(rr.Body.String())
+		if len(events) != 1 {
+			t.Fatalf("Expected 1 event, got %d", len(events))
+		}
+		if events[0].Status != "completed" {
+			t.Errorf("Expected status 'completed', got %s", events[0].Status)
+		}
+	})
+
+	t.Run("failed deployment sends single event", func(t *testing.T) {
+		tagID := "stream-failed-123"
+		_, err := db.Exec("INSERT INTO deployments (tag_id, service_name, job_id, status) VALUES (?, ?, ?, ?)",
+			tagID, "test-service", "eval-456", "failed")
+		if err != nil {
+			t.Fatalf("Failed to insert deployment: %v", err)
+		}
+
+		req, err := http.NewRequest("GET", "/deploy/stream/"+tagID, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rr := httptest.NewRecorder()
+		router := mux.NewRouter()
+		router.HandleFunc("/deploy/stream/{tag_id}", handler.StreamDeploymentStatus).Methods("GET")
+		router.ServeHTTP(rr, req)
+
+		events := parseSSEEvents(rr.Body.String())
+		if len(events) != 1 {
+			t.Fatalf("Expected 1 event, got %d", len(events))
+		}
+		if events[0].Status != "failed" {
+			t.Errorf("Expected status 'failed', got %s", events[0].Status)
+		}
+	})
+}
+
+func TestStreamDeploymentStatusNotFound(t *testing.T) {
+	handler, _ := setupTestHandler(t)
+
+	req, err := http.NewRequest("GET", "/deploy/stream/non-existent", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	router := mux.NewRouter()
+	router.HandleFunc("/deploy/stream/{tag_id}", handler.StreamDeploymentStatus).Methods("GET")
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("Expected status 404, got %d", rr.Code)
+	}
+}
+
+func TestStreamDeploymentStatusNoEvalID(t *testing.T) {
+	handler, db := setupTestHandler(t)
+
+	tagID := "stream-no-eval-123"
+	_, err := db.Exec("INSERT INTO deployments (tag_id, service_name, job_id, status) VALUES (?, ?, ?, ?)",
+		tagID, "test-service", "", "running")
+	if err != nil {
+		t.Fatalf("Failed to insert deployment: %v", err)
+	}
+
+	req, err := http.NewRequest("GET", "/deploy/stream/"+tagID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	router := mux.NewRouter()
+	router.HandleFunc("/deploy/stream/{tag_id}", handler.StreamDeploymentStatus).Methods("GET")
+	router.ServeHTTP(rr, req)
+
+	events := parseSSEEvents(rr.Body.String())
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(events))
+	}
+	if events[0].Status != "error" {
+		t.Errorf("Expected status 'error', got %s", events[0].Status)
+	}
+	if !strings.Contains(events[0].Message, "No evaluation ID") {
+		t.Errorf("Expected message about missing eval ID, got: %s", events[0].Message)
+	}
+}
+
+func TestStreamDeploymentStatusWithMockNomad(t *testing.T) {
+	t.Run("eval complete with no deployment", func(t *testing.T) {
+		// Mock Nomad server that returns completed evaluation with no deployment
+		mockNomad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/v1/evaluation/") {
+				resp := map[string]interface{}{
+					"ID":                "eval-mock-123",
+					"Status":            "complete",
+					"StatusDescription": "evaluation complete",
+					"DeploymentID":      "",
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(resp)
+				return
+			}
+			http.Error(w, "not found", http.StatusNotFound)
+		}))
+		defer mockNomad.Close()
+
+		handler, db := setupTestHandlerWithNomadURL(t, mockNomad.URL)
+
+		tagID := "stream-eval-complete-123"
+		_, err := db.Exec("INSERT INTO deployments (tag_id, service_name, job_id, status) VALUES (?, ?, ?, ?)",
+			tagID, "test-service", "eval-mock-123", "running")
+		if err != nil {
+			t.Fatalf("Failed to insert deployment: %v", err)
+		}
+
+		req, err := http.NewRequest("GET", "/deploy/stream/"+tagID, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rr := httptest.NewRecorder()
+		router := mux.NewRouter()
+		router.HandleFunc("/deploy/stream/{tag_id}", handler.StreamDeploymentStatus).Methods("GET")
+		router.ServeHTTP(rr, req)
+
+		events := parseSSEEvents(rr.Body.String())
+		if len(events) < 2 {
+			t.Fatalf("Expected at least 2 events (tracking + completed), got %d", len(events))
+		}
+
+		// First event should be "tracking"
+		if events[0].Status != "tracking" {
+			t.Errorf("Expected first event status 'tracking', got %s", events[0].Status)
+		}
+
+		// Last event should be "completed"
+		lastEvent := events[len(events)-1]
+		if lastEvent.Status != "completed" {
+			t.Errorf("Expected last event status 'completed', got %s", lastEvent.Status)
+		}
+	})
+
+	t.Run("eval failed", func(t *testing.T) {
+		mockNomad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/v1/evaluation/") {
+				resp := map[string]interface{}{
+					"ID":                "eval-fail-123",
+					"Status":            "failed",
+					"StatusDescription": "insufficient resources",
+					"DeploymentID":      "",
+					"FailedTGAllocs": map[string]interface{}{
+						"web": map[string]interface{}{
+							"NodesAvailable": 0,
+						},
+					},
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(resp)
+				return
+			}
+			http.Error(w, "not found", http.StatusNotFound)
+		}))
+		defer mockNomad.Close()
+
+		handler, db := setupTestHandlerWithNomadURL(t, mockNomad.URL)
+
+		tagID := "stream-eval-failed-123"
+		_, err := db.Exec("INSERT INTO deployments (tag_id, service_name, job_id, status) VALUES (?, ?, ?, ?)",
+			tagID, "test-service", "eval-fail-123", "running")
+		if err != nil {
+			t.Fatalf("Failed to insert deployment: %v", err)
+		}
+
+		req, err := http.NewRequest("GET", "/deploy/stream/"+tagID, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rr := httptest.NewRecorder()
+		router := mux.NewRouter()
+		router.HandleFunc("/deploy/stream/{tag_id}", handler.StreamDeploymentStatus).Methods("GET")
+		router.ServeHTTP(rr, req)
+
+		events := parseSSEEvents(rr.Body.String())
+		if len(events) < 2 {
+			t.Fatalf("Expected at least 2 events, got %d", len(events))
+		}
+
+		lastEvent := events[len(events)-1]
+		if lastEvent.Status != "failed" {
+			t.Errorf("Expected last event status 'failed', got %s", lastEvent.Status)
+		}
+		if !strings.Contains(lastEvent.Message, "insufficient resources") {
+			t.Errorf("Expected failure message to contain reason, got: %s", lastEvent.Message)
+		}
+	})
+
+	t.Run("eval with deployment tracking", func(t *testing.T) {
+		callCount := 0
+		mockNomad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+
+			if strings.HasPrefix(r.URL.Path, "/v1/evaluation/") {
+				resp := map[string]interface{}{
+					"ID":           "eval-deploy-123",
+					"Status":       "complete",
+					"DeploymentID": "deploy-abc-123",
+				}
+				json.NewEncoder(w).Encode(resp)
+				return
+			}
+
+			if strings.HasPrefix(r.URL.Path, "/v1/deployment/") {
+				callCount++
+				status := "running"
+				if callCount >= 2 {
+					status = "successful"
+				}
+				resp := map[string]interface{}{
+					"ID":                "deploy-abc-123",
+					"Status":            status,
+					"StatusDescription": "",
+					"JobID":             "test-job",
+					"TaskGroups": map[string]interface{}{
+						"web": map[string]interface{}{
+							"DesiredTotal":    3,
+							"HealthyAllocs":   callCount,
+							"UnhealthyAllocs": 0,
+							"PlacedAllocs":    3,
+						},
+					},
+				}
+				json.NewEncoder(w).Encode(resp)
+				return
+			}
+
+			http.Error(w, "not found", http.StatusNotFound)
+		}))
+		defer mockNomad.Close()
+
+		handler, db := setupTestHandlerWithNomadURL(t, mockNomad.URL)
+
+		tagID := "stream-deploy-track-123"
+		_, err := db.Exec("INSERT INTO deployments (tag_id, service_name, job_id, status) VALUES (?, ?, ?, ?)",
+			tagID, "test-service", "eval-deploy-123", "running")
+		if err != nil {
+			t.Fatalf("Failed to insert deployment: %v", err)
+		}
+
+		req, err := http.NewRequest("GET", "/deploy/stream/"+tagID, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rr := httptest.NewRecorder()
+		router := mux.NewRouter()
+		router.HandleFunc("/deploy/stream/{tag_id}", handler.StreamDeploymentStatus).Methods("GET")
+		router.ServeHTTP(rr, req)
+
+		events := parseSSEEvents(rr.Body.String())
+		if len(events) < 3 {
+			t.Fatalf("Expected at least 3 events (tracking, deploying, completed), got %d", len(events))
+		}
+
+		// Check we got a completed event at the end
+		lastEvent := events[len(events)-1]
+		if lastEvent.Status != "completed" {
+			t.Errorf("Expected final status 'completed', got %s", lastEvent.Status)
+		}
+
+		// Check that we received deployment ID in events
+		foundDeploymentID := false
+		for _, e := range events {
+			if e.DeploymentID == "deploy-abc-123" {
+				foundDeploymentID = true
+				break
+			}
+		}
+		if !foundDeploymentID {
+			t.Error("Expected deployment ID in stream events")
+		}
+	})
+}
+
+func TestDeleteDeploymentHandler(t *testing.T) {
+	t.Run("successful delete with mock Nomad", func(t *testing.T) {
+		mockNomad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/v1/job/") {
+				resp := map[string]string{
+					"EvalID": "eval-stop-123",
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(resp)
+				return
+			}
+			http.Error(w, "not found", http.StatusNotFound)
+		}))
+		defer mockNomad.Close()
+
+		handler, _ := setupTestHandlerWithNomadURL(t, mockNomad.URL)
+
+		req, err := http.NewRequest("DELETE", "/deploy/test-service", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rr := httptest.NewRecorder()
+		router := mux.NewRouter()
+		router.HandleFunc("/deploy/{service_name}", handler.DeleteDeployment).Methods("DELETE")
+		router.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d. Body: %s", rr.Code, rr.Body.String())
+		}
+
+		var response models.DeleteResponse
+		if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		if response.Status != "stopped" {
+			t.Errorf("Expected status 'stopped', got %s", response.Status)
+		}
+		if response.ServiceName != "test-service" {
+			t.Errorf("Expected service_name 'test-service', got %s", response.ServiceName)
+		}
+		if response.EvalID != "eval-stop-123" {
+			t.Errorf("Expected eval_id 'eval-stop-123', got %s", response.EvalID)
+		}
+	})
+
+	t.Run("Nomad returns error", func(t *testing.T) {
+		mockNomad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "job not found", http.StatusNotFound)
+		}))
+		defer mockNomad.Close()
+
+		handler, _ := setupTestHandlerWithNomadURL(t, mockNomad.URL)
+
+		req, err := http.NewRequest("DELETE", "/deploy/non-existent-service", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rr := httptest.NewRecorder()
+		router := mux.NewRouter()
+		router.HandleFunc("/deploy/{service_name}", handler.DeleteDeployment).Methods("DELETE")
+		router.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusInternalServerError {
+			t.Errorf("Expected status 500, got %d", rr.Code)
 		}
 	})
 }
