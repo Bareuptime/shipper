@@ -297,6 +297,134 @@ func (c *Client) GetJobStatus(evalID string) (string, error) {
 	return mappedStatus, nil
 }
 
+// GetEvaluation returns full evaluation details including DeploymentID
+func (c *Client) GetEvaluation(evalID string) (*models.NomadEvalResponse, error) {
+	c.logger.WithFields(logrus.Fields{
+		"eval_id":   evalID,
+		"nomad_url": c.URL,
+	}).Debug("Fetching evaluation details")
+
+	url := fmt.Sprintf("%s/v1/evaluation/%s", c.URL, evalID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	if c.Token != "" {
+		req.Header.Add("X-Nomad-Token", c.Token)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get evaluation from Nomad: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("nomad returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var evalResp models.NomadEvalResponse
+	if err := json.NewDecoder(resp.Body).Decode(&evalResp); err != nil {
+		return nil, fmt.Errorf("failed to decode evaluation response: %v", err)
+	}
+
+	c.logger.WithFields(logrus.Fields{
+		"eval_id":       evalID,
+		"status":        evalResp.Status,
+		"deployment_id": evalResp.DeploymentID,
+	}).Debug("Evaluation details fetched")
+
+	return &evalResp, nil
+}
+
+// GetDeploymentStatus returns deployment status with task group details
+func (c *Client) GetDeploymentStatus(deploymentID string) (*models.NomadDeploymentResponse, error) {
+	c.logger.WithFields(logrus.Fields{
+		"deployment_id": deploymentID,
+		"nomad_url":     c.URL,
+	}).Debug("Fetching deployment status")
+
+	url := fmt.Sprintf("%s/v1/deployment/%s", c.URL, deploymentID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	if c.Token != "" {
+		req.Header.Add("X-Nomad-Token", c.Token)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get deployment from Nomad: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("nomad returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var deployResp models.NomadDeploymentResponse
+	if err := json.NewDecoder(resp.Body).Decode(&deployResp); err != nil {
+		return nil, fmt.Errorf("failed to decode deployment response: %v", err)
+	}
+
+	c.logger.WithFields(logrus.Fields{
+		"deployment_id": deploymentID,
+		"status":        deployResp.Status,
+	}).Debug("Deployment status fetched")
+
+	return &deployResp, nil
+}
+
+// StopJob deregisters a job from Nomad, stopping all its allocations
+func (c *Client) StopJob(serviceName string, purge bool) (*models.NomadJobStopResponse, error) {
+	c.logger.WithFields(logrus.Fields{
+		"service_name": serviceName,
+		"purge":        purge,
+		"nomad_url":    c.URL,
+	}).Info("Stopping job in Nomad")
+
+	url := fmt.Sprintf("%s/v1/job/%s", c.URL, serviceName)
+	if purge {
+		url += "?purge=true"
+	}
+
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	if c.Token != "" {
+		req.Header.Add("X-Nomad-Token", c.Token)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stop job in Nomad: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("nomad returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var stopResp models.NomadJobStopResponse
+	if err := json.NewDecoder(resp.Body).Decode(&stopResp); err != nil {
+		return nil, fmt.Errorf("failed to decode stop response: %v", err)
+	}
+
+	c.logger.WithFields(logrus.Fields{
+		"service_name": serviceName,
+		"eval_id":      stopResp.EvalID,
+	}).Info("Job stopped successfully")
+
+	return &stopResp, nil
+}
+
 // SubmitJobFile submits a Nomad job file directly to Nomad
 func (c *Client) SubmitJobFile(jobJSON map[string]interface{}, tagID string) (string, error) {
 	c.logger.WithFields(logrus.Fields{

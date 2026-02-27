@@ -307,6 +307,293 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 	h.writeJSONResponse(w, response)
 }
 
+func (h *Handler) StreamDeploymentStatus(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	tagID := vars["tag_id"]
+
+	h.logger.WithField("tag_id", tagID).Info("Stream deployment status request received")
+
+	// Look up deployment in DB
+	_, jobID, status, err := database.GetDeployment(h.db, tagID)
+	if err != nil {
+		h.logger.WithError(err).WithField("tag_id", tagID).Error("Deployment not found")
+		http.Error(w, fmt.Sprintf("Deployment not found: %v", err), http.StatusNotFound)
+		return
+	}
+
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// If already in terminal state, send single event and close
+	if status == "completed" || status == "failed" {
+		h.sendSSE(w, flusher, models.StreamEvent{
+			Status:    status,
+			Message:   fmt.Sprintf("Deployment already %s", status),
+			Timestamp: time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	// If no eval ID available, can't track
+	if jobID == "" {
+		h.sendSSE(w, flusher, models.StreamEvent{
+			Status:    "error",
+			Message:   "No evaluation ID available for tracking",
+			Timestamp: time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	// Extend write deadline for long-lived SSE connection
+	rc := http.NewResponseController(w)
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	// Maximum stream duration of 10 minutes
+	timeout := time.NewTimer(10 * time.Minute)
+	defer timeout.Stop()
+
+	var deploymentID string
+	var lastStatus string
+
+	// Send initial event
+	h.sendSSE(w, flusher, models.StreamEvent{
+		Status:    "tracking",
+		Message:   "Connected to deployment stream",
+		EvalID:    jobID,
+		Timestamp: time.Now().Format(time.RFC3339),
+	})
+
+	for {
+		select {
+		case <-r.Context().Done():
+			h.logger.WithField("tag_id", tagID).Info("Client disconnected from stream")
+			return
+		case <-timeout.C:
+			h.sendSSE(w, flusher, models.StreamEvent{
+				Status:    "timeout",
+				Message:   "Stream timeout reached, deployment may still be in progress. Use /status endpoint to check.",
+				Timestamp: time.Now().Format(time.RFC3339),
+			})
+			return
+		case <-ticker.C:
+			// Extend write deadline for this tick
+			if err := rc.SetWriteDeadline(time.Now().Add(30 * time.Second)); err != nil {
+				h.logger.WithError(err).Warn("Failed to set write deadline")
+			}
+
+			// If we have a deployment ID, track the deployment directly
+			if deploymentID != "" {
+				deploy, err := h.nomad.GetDeploymentStatus(deploymentID)
+				if err != nil {
+					h.sendSSE(w, flusher, models.StreamEvent{
+						Status:       "error",
+						Message:      fmt.Sprintf("Failed to get deployment status: %v", err),
+						DeploymentID: deploymentID,
+						Timestamp:    time.Now().Format(time.RFC3339),
+					})
+					continue
+				}
+
+				// Calculate totals across task groups
+				var totalHealthy, totalUnhealthy, totalDesired int
+				for _, tg := range deploy.TaskGroups {
+					totalHealthy += tg.HealthyAllocs
+					totalUnhealthy += tg.UnhealthyAllocs
+					totalDesired += tg.DesiredTotal
+				}
+
+				currentStatus := mapDeploymentStatus(deploy.Status)
+				message := deploy.StatusDescription
+				if message == "" {
+					message = fmt.Sprintf("Deployment %s: %d/%d healthy", deploy.Status, totalHealthy, totalDesired)
+				}
+
+				event := models.StreamEvent{
+					Status:       currentStatus,
+					Message:      message,
+					DeploymentID: deploymentID,
+					Healthy:      totalHealthy,
+					Unhealthy:    totalUnhealthy,
+					Total:        totalDesired,
+					Timestamp:    time.Now().Format(time.RFC3339),
+				}
+
+				h.sendSSE(w, flusher, event)
+
+				// Update DB if status changed
+				if currentStatus != lastStatus {
+					lastStatus = currentStatus
+					if updateErr := database.UpdateDeploymentStatus(h.db, tagID, currentStatus); updateErr != nil {
+						h.logger.WithError(updateErr).Error("Failed to update deployment status in DB")
+					}
+				}
+
+				// If terminal, close stream
+				if currentStatus == "completed" || currentStatus == "failed" {
+					return
+				}
+				continue
+			}
+
+			// Check evaluation status to find deployment ID
+			eval, err := h.nomad.GetEvaluation(jobID)
+			if err != nil {
+				h.sendSSE(w, flusher, models.StreamEvent{
+					Status:    "error",
+					Message:   fmt.Sprintf("Failed to get evaluation status: %v", err),
+					EvalID:    jobID,
+					Timestamp: time.Now().Format(time.RFC3339),
+				})
+				continue
+			}
+
+			// Check if eval has created a deployment
+			if eval.DeploymentID != "" {
+				deploymentID = eval.DeploymentID
+				h.sendSSE(w, flusher, models.StreamEvent{
+					Status:       "deploying",
+					Message:      "Deployment created, tracking progress",
+					EvalID:       jobID,
+					DeploymentID: deploymentID,
+					Timestamp:    time.Now().Format(time.RFC3339),
+				})
+				lastStatus = "deploying"
+				continue
+			}
+
+			// Handle evaluation terminal states
+			switch eval.Status {
+			case "complete":
+				// Eval complete but no deployment - simple job update without update stanza
+				h.sendSSE(w, flusher, models.StreamEvent{
+					Status:    "completed",
+					Message:   "Evaluation complete, job scheduled successfully",
+					EvalID:    jobID,
+					Timestamp: time.Now().Format(time.RFC3339),
+				})
+				if updateErr := database.UpdateDeploymentStatus(h.db, tagID, "completed"); updateErr != nil {
+					h.logger.WithError(updateErr).Error("Failed to update deployment status in DB")
+				}
+				return
+			case "failed":
+				msg := eval.StatusDescription
+				if msg == "" {
+					msg = "Evaluation failed"
+				}
+				if len(eval.FailedTGAllocs) > 0 {
+					msg += fmt.Sprintf(" (failed task group allocations: %v)", eval.FailedTGAllocs)
+				}
+				h.sendSSE(w, flusher, models.StreamEvent{
+					Status:    "failed",
+					Message:   msg,
+					EvalID:    jobID,
+					Timestamp: time.Now().Format(time.RFC3339),
+				})
+				if updateErr := database.UpdateDeploymentStatus(h.db, tagID, "failed"); updateErr != nil {
+					h.logger.WithError(updateErr).Error("Failed to update deployment status in DB")
+				}
+				return
+			case "canceled":
+				h.sendSSE(w, flusher, models.StreamEvent{
+					Status:    "failed",
+					Message:   "Evaluation was canceled",
+					EvalID:    jobID,
+					Timestamp: time.Now().Format(time.RFC3339),
+				})
+				if updateErr := database.UpdateDeploymentStatus(h.db, tagID, "failed"); updateErr != nil {
+					h.logger.WithError(updateErr).Error("Failed to update deployment status in DB")
+				}
+				return
+			case "blocked":
+				if eval.Status != lastStatus {
+					h.sendSSE(w, flusher, models.StreamEvent{
+						Status:    "blocked",
+						Message:   fmt.Sprintf("Evaluation blocked: %s", eval.StatusDescription),
+						EvalID:    jobID,
+						Timestamp: time.Now().Format(time.RFC3339),
+					})
+					lastStatus = eval.Status
+				}
+			default:
+				// pending or other
+				if eval.Status != lastStatus {
+					h.sendSSE(w, flusher, models.StreamEvent{
+						Status:    "evaluating",
+						Message:   fmt.Sprintf("Evaluation %s", eval.Status),
+						EvalID:    jobID,
+						Timestamp: time.Now().Format(time.RFC3339),
+					})
+					lastStatus = eval.Status
+				}
+			}
+		}
+	}
+}
+
+// sendSSE writes a Server-Sent Event to the response
+func (h *Handler) sendSSE(w http.ResponseWriter, flusher http.Flusher, event models.StreamEvent) {
+	data, err := json.Marshal(event)
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to marshal SSE event")
+		return
+	}
+	fmt.Fprintf(w, "data: %s\n\n", data)
+	flusher.Flush()
+}
+
+// mapDeploymentStatus maps Nomad deployment status to internal status
+func mapDeploymentStatus(nomadStatus string) string {
+	switch nomadStatus {
+	case "successful":
+		return "completed"
+	case "failed":
+		return "failed"
+	case "cancelled":
+		return "failed"
+	default:
+		return "running"
+	}
+}
+
+func (h *Handler) DeleteDeployment(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serviceName := vars["service_name"]
+
+	h.logger.WithField("service_name", serviceName).Info("Delete deployment request received")
+
+	if serviceName == "" {
+		http.Error(w, "Service name is required", http.StatusBadRequest)
+		return
+	}
+
+	stopResp, err := h.nomad.StopJob(serviceName, false)
+	if err != nil {
+		h.logger.WithError(err).WithField("service_name", serviceName).Error("Failed to stop job in Nomad")
+		http.Error(w, fmt.Sprintf("Failed to stop job: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	response := models.DeleteResponse{
+		Status:      "stopped",
+		ServiceName: serviceName,
+		Message:     fmt.Sprintf("Job '%s' has been stopped successfully", serviceName),
+		EvalID:      stopResp.EvalID,
+	}
+
+	h.writeJSONResponse(w, response)
+}
+
 // parseJobFileWithNomadAPI converts HCL job content to JSON using Nomad's parse API
 func (h *Handler) parseJobFileWithNomadAPI(jobHCL, tagID string) (map[string]interface{}, error) {
 	h.logger.WithField("tag_id", tagID).Info("Parsing job file using Nomad API")

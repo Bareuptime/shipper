@@ -68,6 +68,12 @@ func (s *Server) setupRoutes() {
 	// Deploy endpoint
 	protectedRouter.HandleFunc("/deploy", s.handler.Deploy).Methods("POST")
 
+	// Streaming deployment status endpoint (SSE)
+	protectedRouter.HandleFunc("/deploy/stream/{tag_id}", s.handler.StreamDeploymentStatus).Methods("GET")
+
+	// Delete deployment endpoint
+	protectedRouter.HandleFunc("/deploy/{service_name}", s.handler.DeleteDeployment).Methods("DELETE")
+
 	// Status endpoint
 	protectedRouter.HandleFunc("/status/{tag_id}", s.handler.Status).Methods("GET")
 

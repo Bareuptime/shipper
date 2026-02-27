@@ -92,6 +92,8 @@ func setupTestRouter(t *testing.T) (*mux.Router, *sql.DB) {
 	protectedRouter.Use(authMiddleware)
 	protectedRouter.HandleFunc("/deploy", handler.Deploy).Methods("POST")
 	protectedRouter.HandleFunc("/deploy/job", handler.DeployJob).Methods("POST")
+	protectedRouter.HandleFunc("/deploy/stream/{tag_id}", handler.StreamDeploymentStatus).Methods("GET")
+	protectedRouter.HandleFunc("/deploy/{service_name}", handler.DeleteDeployment).Methods("DELETE")
 	protectedRouter.HandleFunc("/status/{tag_id}", handler.Status).Methods("GET")
 
 	return router, db
@@ -242,6 +244,8 @@ func TestAuthMiddleware(t *testing.T) {
 	}{
 		{"POST", "/deploy"},
 		{"POST", "/deploy/job"},
+		{"GET", "/deploy/stream/test-123"},
+		{"DELETE", "/deploy/test-service"},
 		{"GET", "/status/test-123"},
 	}
 
@@ -250,10 +254,18 @@ func TestAuthMiddleware(t *testing.T) {
 			var resp *http.Response
 			var err error
 
-			if endpoint.method == "POST" {
+			switch endpoint.method {
+			case "POST":
 				body := bytes.NewBuffer([]byte(`{"service_name":"test","tag_id":"test"}`))
 				resp, err = http.Post(server.URL+endpoint.path, "application/json", body)
-			} else {
+			case "DELETE":
+				req, reqErr := http.NewRequest("DELETE", server.URL+endpoint.path, nil)
+				if reqErr != nil {
+					t.Fatal(reqErr)
+				}
+				client := &http.Client{}
+				resp, err = client.Do(req)
+			default:
 				resp, err = http.Get(server.URL + endpoint.path)
 			}
 

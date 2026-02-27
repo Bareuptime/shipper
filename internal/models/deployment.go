@@ -30,3 +30,21 @@ type Deployment struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
+
+type StreamEvent struct {
+	Status       string `json:"status"`
+	Message      string `json:"message"`
+	EvalID       string `json:"eval_id,omitempty"`
+	DeploymentID string `json:"deployment_id,omitempty"`
+	Healthy      int    `json:"healthy,omitempty"`
+	Total        int    `json:"total,omitempty"`
+	Unhealthy    int    `json:"unhealthy,omitempty"`
+	Timestamp    string `json:"timestamp"`
+}
+
+type DeleteResponse struct {
+	Status      string `json:"status"`
+	ServiceName string `json:"service_name"`
+	Message     string `json:"message"`
+	EvalID      string `json:"eval_id,omitempty"`
+}
